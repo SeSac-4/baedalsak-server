@@ -1,0 +1,33 @@
+# 저장소 루트 기준. **/ 는 모든 하위 모듈에 적용됨
+
+# 빌드 산출물·캐시 (컨테이너 안에서 새로 빌드함)
+**/build/
+**/out/
+**/bin/
+**/target/
+.gradle/
+**/.gradle/
+
+# 비밀 정보 — 이미지에 절대 들어가면 안 됨
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+
+# 저장소·IDE·OS 파일
+.git/
+.github/
+**/.vscode/
+**/.idea/
+**/*.iml
+**/.DS_Store
+
+# 이미지 빌드와 무관한 파일
+**/Dockerfile
+.dockerignore
+**/compose*.yaml
+**/docker-compose*.yml
+**/*.md
+frontend/
+node_modules/
+**/node_modules/
