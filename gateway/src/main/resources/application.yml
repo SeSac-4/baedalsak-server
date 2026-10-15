@@ -1,0 +1,77 @@
+# gateway 서비스
+# 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
+# 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
+#
+# gateway는 DB를 직접 보지 않는다 (docs 4번: 다른 서비스 schema 직접 조회 금지).
+
+server:
+  port: ${SERVER_PORT:8080}            # docs 1번 표. 컨테이너 안에서도 8080
+  shutdown: graceful                   # 배포 중 처리 중인 요청을 끝내고 종료 (docs 6번)
+
+spring:
+  application:
+    name: gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  # docs 5번: 세션 관리용 Redis (gateway·user만 사용)
+  data:
+    redis:
+      host: ${REDIS_SESSION_HOST:localhost}
+      port: ${REDIS_SESSION_PORT:6379}
+      password: ${REDIS_SESSION_PASSWORD}
+  session:
+    store-type: redis                  # Spring Session이 TTL을 자동으로 붙인다 (docs 5번)
+
+  cloud:
+    gateway:
+      # Spring Cloud Gateway 4.3부터의 설정 경로.
+      # 예전 'spring.cloud.gateway.routes'는 deprecated 됐으므로 쓰지 말 것.
+      server:
+        webflux:
+          routes:
+            # uri는 docs 3번 표의 *_URL 환경 변수로만 받는다.
+            # 컨테이너 안에서는 http://store:8080 처럼 서비스 이름으로 주입된다(compose.yaml).
+            # 기본값은 로컬 VSCode 실행용 포트(docs 1번 표).
+            #
+            # Path 규칙은 각 서비스 API 설계에 맞춰 담당자가 조정한다.
+            - id: store
+              uri: ${STORE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/stores/**
+
+            - id: order
+              uri: ${ORDER_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/orders/**
+
+            - id: payment
+              uri: ${PAYMENT_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/payments/**
+
+            - id: delivery
+              uri: ${DELIVERY_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/deliveries/**
+
+            - id: notification
+              uri: ${NOTIFICATION_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/notifications/**
+
+            - id: user
+              uri: ${USER_URL:http://localhost:8086}
+              predicates:
+                - Path=/api/users/**
+
+# docs 2번: /actuator/health 는 K8s probe, /actuator/prometheus 는 지표 수집에 쓰인다
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true                  # /actuator/health/liveness, /readiness 활성화

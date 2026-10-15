@@ -1,0 +1,43 @@
+# delivery 서비스
+# 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
+# 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
+
+server:
+  port: ${SERVER_PORT:8084}        # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
+  shutdown: graceful                   # 배포 중 처리 중인 요청을 끝내고 종료 (docs 6번)
+
+spring:
+  application:
+    name: delivery
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  datasource:
+    # docs 4번: RDS 인스턴스 1개 + 서비스별 schema 분리. schema=delivery, 계정=delivery_svc
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:baedalsak}?currentSchema=${DB_SCHEMA:delivery}
+    username: ${DB_USER:delivery_svc}
+    password: ${DB_PASSWORD}           # 기본값을 코드에 넣지 않는다 (docs 6번)
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # 자기 schema에만 테이블을 만들 수 있고 public은 막혀 있다 (docs 4번).
+      # 스키마 변경은 서비스 담당자가 Flyway 등으로 관리할지 결정한다.
+      ddl-auto: none
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+
+# docs 2번: /actuator/health 는 K8s probe, /actuator/prometheus 는 지표 수집에 쓰인다
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true                  # /actuator/health/liveness, /readiness 활성화

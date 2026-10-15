@@ -1,0 +1,12 @@
+// 루트 build.gradle이 Java 21 / Spring Boot BOM / actuator / micrometer-prometheus /
+// lombok 을 이미 넣어 준다 (docs 2번). 여기에는 이 서비스에만 필요한 것만 적는다.
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'      // RabbitMQ (docs 3번)
+
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // DynamoDB를 쓸지는 서비스 단계에서 결정한다 (docs 4번). 쓰게 되면 AWS SDK를 여기에 추가.
+}

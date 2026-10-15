@@ -20,9 +20,16 @@ smoke-test/
 *.zip
 
 # ---------- Gradle 빌드 산출물·캐시 ----------
-.gradle/
-build/
-out/
+# 경로를 고정(/ 로 시작)한다. `build/` 처럼 쓰면 깊이와 무관하게 같은 이름의
+# 디렉터리를 모두 먹어서 com/example/order/build/OrderBuilder.java 같은
+# 소스 패키지가 에러도 없이 커밋에서 빠진다.
+# Gradle이 만드는 건 루트와 모듈 바로 아래 두 군데뿐이다.
+/.gradle/
+*/.gradle/
+/build/
+*/build/
+/out/
+*/out/
 !gradle/wrapper/gradle-wrapper.jar
 HELP.md
 
@@ -35,11 +42,16 @@ logs/
 *.iml
 *.ipr
 *.iws
-.vscode/
+.vscode/*
+# docs 179~195줄이 ".vscode/launch.json에 envFile을 지정하라"
+# mainClass.envFile 커밋해서 공유하기위해 추가
+!.vscode/launch.json
 .classpath
 .project
 .settings/
-bin/
+# bin/ 도 경로 고정 — com/example/store/bin/ 같은 패키지가 사라지지 않게
+/bin/
+*/bin/
 
 # ---------- OS ----------
 .DS_Store
@@ -47,9 +59,12 @@ Thumbs.db
 desktop.ini
 
 # ---------- Claude Code 개인 설정 ---------
-.claude/settings.local.json
-CLAUDE.local.md
+# .claude 가 디렉터리 전체를 무시하므로 .claude/settings.local.json 같은
+# 하위 규칙은 효과가 없다 (상위가 제외되면 하위를 되살릴 수 없음).
+# 공유용 .claude/settings.json 을 커밋하려면 아래 `.claude` 줄을 지우고
+# `.claude/settings.local.json` 로 되돌려야 한다.
 .claude
-CLAUDE.md
+CLAUDE.local.md
+# CLAUDE.md -> 공유부분으로 판단.
 
 Dockerfile_v*

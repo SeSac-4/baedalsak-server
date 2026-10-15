@@ -1,0 +1,10 @@
+rootProject.name = 'baedalsak-server'
+
+// docs 1번: 모듈 이름 = 폴더 경로. projectDir로 이름을 따로 바꾸지 말 것
+include 'gateway'
+include 'store'
+include 'order'
+include 'payment'
+include 'delivery'
+include 'notification'
+include 'user'
