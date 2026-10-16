@@ -56,6 +56,12 @@ subprojects {
         }
     }
 
+    // Spring Boot 4.0.x 가 관리하는 11.0.24 에 CVE-2026-65905 / CVE-2026-68525 (CRITICAL).
+    // 부트가 11.0.25+ 를 관리하면 이 블록 삭제할 것.
+    // Boot BOM 의 tomcat.version 속성 하나가 tomcat-embed-core / el / websocket 을 함께 관리하므로
+    // 셋이 항상 같은 버전으로 올라간다 (하나만 올리면 런타임에 깨짐).
+    ext['tomcat.version'] = '11.0.25'
+
     // 버전을 BOM에서 받아오므로 모듈에서는 의존성 버전을 적지 않는다. (docs 2번)
     dependencyManagement {
         imports {
