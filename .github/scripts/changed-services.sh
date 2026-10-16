@@ -8,8 +8,8 @@
 #     - <모듈 폴더>/ 아래 파일이 바뀜          → 그 서비스만
 #     - 무시 목록(프론트·문서·로컬 compose 등)  → 대상 없음
 #     - 그 밖의 파일 (공통 모듈, build.gradle, settings.gradle, gradle/,
-#       Dockerfile, .dockerignore, 백엔드 CI 파일 등)  → 7개 전체
-#     - 기준 커밋이 없음 (수동 실행, 새 브랜치 등)  → 7개 전체
+#       Dockerfile, .dockerignore, 백엔드 CI 파일 등)  → 6개 전체
+#     - 기준 커밋이 없음 (수동 실행, 새 브랜치 등)  → 6개 전체
 #     - 단, 아직 만들어지지 않은 서비스는 항상 제외
 #       (루트에 gradlew 가 없거나, 모듈 폴더에 build.gradle(.kts) 가 없으면 "준비 안 됨")
 #       → 백엔드 팀이 모듈을 추가하면 그 서비스부터 자동으로 CI 대상에 들어감
