@@ -1,0 +1,55 @@
+# =============================================================================
+# baedalsak-server — GitHub 에 올리지 않는 파일
+# =============================================================================
+
+# ---------- 비밀 정보 (절대 커밋 금지) ----------
+# 로컬 비밀번호. 커밋은 .env.example 만
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# ---------- 검증용·전달용 파일 ----------
+# 인프라 검증용 최소 프로젝트 (실제 서비스 코드가 아님)
+smoke-test/
+# 인수인계 압축본 (내용은 저장소에 반영)
+*.zip
+
+# ---------- Gradle 빌드 산출물·캐시 ----------
+.gradle/
+build/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+HELP.md
+
+# ---------- 로그 ----------
+*.log
+logs/
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Claude Code 개인 설정 ---------
+.claude/settings.local.json
+CLAUDE.local.md
+.claude
+CLAUDE.md
+
+Dockerfile_v*

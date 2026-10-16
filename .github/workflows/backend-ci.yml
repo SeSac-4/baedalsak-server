@@ -1,0 +1,84 @@
+# =============================================================================
+# 백엔드 CI (baedalsak-server)
+#
+#   PR → main      : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사   (push 없음)
+#   main 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64·arm64) → Trivy 검사
+#                    → GHCR push  ghcr.io/<owner>/baedalsak/<서비스>:sha-<7자리>, :main
+#   수동 실행        : 7개 서비스 전체 (main 에서 실행할 때만 push)
+#
+#   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json
+#   서비스별 실제 작업: .github/workflows/_backend-service.yml (재사용 워크플로)
+#
+#   브랜치 보호 규칙의 필수 체크로는 마지막 job "backend-ci 결과" 하나만 지정하세요.
+# =============================================================================
+name: backend-ci
+
+# 트리거에 paths-ignore를 두지 않음
+#   → 문서만 바뀐 PR에서도 워크플로가 실행되어 필수 체크 "backend-ci 결과"가 통과로 찍힘
+#     (paths-ignore가 있으면 워크플로 자체가 안 돌아 필수 체크가 영원히 대기 → 머지 불가)
+#   무시할 경로 판단은 .github/scripts/changed-services.sh 한 곳에서만 함
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 같은 PR에 새 커밋이 오면 이전 실행 취소 (main 은 취소하지 않음)
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: 변경 서비스 감지
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: detect
+        env:
+          # PR: 대상 브랜치 기준 / push: 직전 커밋 기준 / 수동 실행: 비움(전체)
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || '' }}
+        run: bash .github/scripts/changed-services.sh "$BASE_SHA"
+
+  service:
+    name: ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write          # GHCR push
+      security-events: write   # Trivy 결과 → Security 탭
+    uses: ./.github/workflows/_backend-service.yml
+    with:
+      service: ${{ matrix.name }}
+      module: ${{ matrix.module }}
+      push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+
+  # 브랜치 보호 규칙용 단일 체크 (변경 서비스가 없어 service 가 건너뛰어져도 통과)
+  result:
+    name: backend-ci 결과
+    needs: [changes, service]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          SERVICE: ${{ needs.service.result }}
+        run: |
+          echo "changes=$CHANGES service=$SERVICE"
+          [ "$CHANGES" = "success" ] || exit 1
+          case "$SERVICE" in success|skipped) ;; *) exit 1 ;; esac

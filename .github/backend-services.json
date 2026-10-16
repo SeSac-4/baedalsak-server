@@ -1,0 +1,8 @@
+[
+  { "name": "gateway",      "module": "gateway" },
+  { "name": "store",        "module": "store" },
+  { "name": "order",        "module": "order" },
+  { "name": "payment",      "module": "payment" },
+  { "name": "delivery",     "module": "delivery" },
+  { "name": "member",       "module": "member" }
+]
