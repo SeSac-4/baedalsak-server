@@ -1,0 +1,71 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "gateway (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.gateway.GatewayApplication",
+      "projectName": "gateway",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    },
+    {
+      "type": "java",
+      "name": "store (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.store.StoreApplication",
+      "projectName": "store",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    },
+    {
+      "type": "java",
+      "name": "order (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.order.OrderApplication",
+      "projectName": "order",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    },
+    {
+      "type": "java",
+      "name": "payment (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.payment.PaymentApplication",
+      "projectName": "payment",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    },
+    {
+      "type": "java",
+      "name": "delivery (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.delivery.DeliveryApplication",
+      "projectName": "delivery",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    },
+    {
+      "type": "java",
+      "name": "member (local)",
+      "request": "launch",
+      "mainClass": "com.baedalsak.member.MemberApplication",
+      "projectName": "member",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    }
+  ]
+}
