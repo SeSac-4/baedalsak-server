@@ -4,7 +4,7 @@
 #   PR → main      : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사   (push 없음)
 #   main 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64·arm64) → Trivy 검사
 #                    → GHCR push  ghcr.io/<owner>/baedalsak/<서비스>:sha-<7자리>, :main
-#   수동 실행        : 7개 서비스 전체 (main 에서 실행할 때만 push)
+#   수동 실행        : 6개 서비스 전체 (main 에서 실행할 때만 push)
 #
 #   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json
 #   서비스별 실제 작업: .github/workflows/_backend-service.yml (재사용 워크플로)

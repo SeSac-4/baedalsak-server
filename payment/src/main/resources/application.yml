@@ -1,0 +1,88 @@
+# payment 서비스 (결제)
+# 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
+# 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
+
+# 비밀값 (docs 3번 🔒) — 기본값 없이 환경 변수로만 받는다
+#   TOSS_SECRET_KEY: 토스페이먼츠 시크릿 키 (테스트 키만)
+
+server:
+  port: ${SERVER_PORT:8083}          # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
+  shutdown: graceful                  # 배포 중 처리 중인 요청을 끝내고 종료 (docs 6-4)
+
+spring:
+  application:
+    name: payment
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    # docs 4번: RDS 인스턴스 1개 안에 서비스별 DB (DB 이름 = schema 이름). DB=payment, 계정=payment_svc
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:payment}?currentSchema=${DB_SCHEMA:payment}
+    username: ${DB_USER:payment_svc}
+    password: ${DB_PASSWORD}          # 기본값을 코드에 넣지 않음
+    # ## DB 커넥션 풀 (부하 테스트 때 조정) — 지금은 HikariCP 기본값(10) 사용
+    #   필요한 수 ≈ 피크 TPS × 쿼리 1건 평균 시간(초) + 여유  (N1.2 50 TPS × 0.05s ≈ 3 → 10 이면 충분)
+    #   한도: 모든 서비스의 (파드 수 × maximum-pool-size) 합 < DB max_connections (로컬 postgres 기본 100)
+    # hikari:
+    #   maximum-pool-size: 10
+  flyway:
+    schemas: ${DB_SCHEMA:payment}       # 마이그레이션 대상 = 자기 schema (flyway_schema_history 도 여기)
+    default-schema: ${DB_SCHEMA:payment}
+    create-schemas: false             # DB·schema·계정은 초기화 스크립트(로컬) / Terraform(운영)이 만듦
+  jpa:
+    open-in-view: false               # 트랜잭션이 끝나면 바로 커넥션 반납 (docs 4-2)
+    hibernate:
+      ddl-auto: validate              # 테이블은 Flyway 만 만듦. 엔티티와 안 맞으면 시작 실패 (docs 4-2)
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul       # KST
+  jackson:
+    time-zone: Asia/Seoul             # API 응답 시각 KST (+09:00)
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}       # 로컬 / , 운영 Amazon MQ /prod·/dev
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:false} # 로컬 false(5672) / 운영 Amazon MQ true(5671)
+    publisher-confirm-type: correlated      # 발행 확인 (docs 3-2)
+    publisher-returns: true
+    template:
+      mandatory: true                       # 받을 큐가 없는 메시지는 버리지 않고 return
+      observation-enabled: true             # 발행 시 traceId 를 메시지 헤더에 실음
+    listener:
+      simple:
+        # ## 미리 받아 두는 메시지 수 (부하 테스트 때 조정)
+        #   1건 처리가 느릴수록(DB 트랜잭션) 작게, 빠를수록 크게. 파드가 죽으면 이만큼 재전달됨
+        prefetch: 10
+        observation-enabled: true           # 소비 시 헤더의 traceId 를 이어받음
+        default-requeue-rejected: false     # 실패 메시지를 큐에 되돌리지 않음 → DLQ (무한 재처리 방지)
+        retry:                              # 앱 안에서 재시도 후 포기 → DLQ
+          enabled: true
+          max-attempts: 3                   # 최초 1회 + 재시도 2회
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info          # 후순위: ,prometheus (docs 9-2)
+  endpoint:
+    health:
+      probes:
+        enabled: true                 # /actuator/health/liveness, /readiness 활성화
+  tracing:
+    sampling:
+      probability: 1.0                # 요청 100% 추적 (트래픽이 많아지면 낮춤)
+    # 후순위 (관측성): Zipkin 전송 — starter-zipkin 과 함께 주석 해제 (docs 9-2)
+    # export:
+    #   zipkin:
+    #     endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+logging:
+  structured:
+    format:
+      console: logstash               # JSON 로그 (docs 6-1)
