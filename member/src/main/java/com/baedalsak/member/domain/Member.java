@@ -27,8 +27,6 @@ public class Member {
   @Column(nullable = false, unique = true, length = 255)
   private String email;
 
-  @Column(name = "password_hash", nullable = false, length = 100)
-  private String passwordHash;
 
   @Column(nullable = false, length = 50)
   private String name;
@@ -47,9 +45,8 @@ public class Member {
   private OffsetDateTime updatedAt;
   
 
-  public Member(String email, String passwordHash, String name, String phone, Role role) {
+  public Member(String email, String name, String phone, Role role) {
         this.email = email;
-        this.passwordHash = passwordHash;
         this.name = name;
         this.phone = phone;
         this.role = role;
