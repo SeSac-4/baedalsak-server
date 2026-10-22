@@ -9,4 +9,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'        // RabbitMQ (docs 3-1)
 
     runtimeOnly 'org.postgresql:postgresql'
+
+    // API 통합 테스트: MockMvc + 실제 PostgreSQL 컨테이너 (N6.5). 실행하려면 Docker 필요
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
