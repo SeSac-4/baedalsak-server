@@ -7,6 +7,7 @@
 - 작성: 인프라(백엔드 A) · 2026-10-13
 - v3 수정 2026-10-16: Spring Boot 4, 서비스 6개(user → **member**, notification 제거), RDS 인스턴스 1개 + **서비스별 DB 5개**, RabbitMQ 4.2 + vhost·TLS·exchange·발행 확인, Flyway(Boot 4 starter), JPA, Outbox, 분산 추적(Zipkin), JSON 로그, KST, 비밀값 이름, `*_SERVICE_URL`, `/api/v*` 라우팅, DynamoDB 주석 처리(9-1)
 - 2026-10-16 추가: 관측성(Zipkin·Prometheus·Grafana·Fluent Bit)은 **후순위 — 주석 처리** (9-2). traceId 로그 추적은 유지
+- 2026-10-22 수정: 메일 발송을 `@Async` 직접 호출 → **자기 메일 큐 + 동기 리스너**로 확정 (10번), 메일 큐 이름 규칙 추가 (3-1)
 - 관련 파일: `Dockerfile`, `.dockerignore`, `compose.yaml`, `.env.example`, `docker/local/postgres/init/`
 - 동작 예시: `smoke-test/` (이 규칙대로 만든 검증용 6개 모듈, 저장소 미포함)
 
@@ -33,7 +34,7 @@
 | delivery | 배달 | `delivery` | 8084 |
 | member | 인증·인가 | `member` | 8085 |
 
-> 알림(notification) 서비스는 없습니다. 메일은 각 서비스가 `@Async` 로 AWS SES 를 직접 호출합니다 (10번).
+> 알림(notification) 서비스는 없습니다. 메일은 이벤트를 발행한 서비스가 자기 이벤트를 **자기 메일 큐**로 다시 받아 AWS SES 로 보냅니다 (10번).
 
 ---
 
@@ -202,9 +203,10 @@ logging:
 
 | 대상 | 이름 규칙 | 예 (delivery 가 주문 수락 이벤트를 받음) |
 |---|---|---|
-| 이벤트 exchange | **`baedalssak.events`** (topic, 전 서비스 공용 1개) | — |
+| 이벤트 exchange | **`baedalsak.events`** (topic, 전 서비스 공용 1개) | — |
 | 라우팅 키 | `<발행 도메인>.<사건>` | `order.accepted` |
 | 큐 | `<받는 서비스>.<이벤트>` (받는 쪽이 선언·소유) | `delivery.order-accepted` |
+| 메일 큐 | `<발행 서비스>.mail.<이벤트>` (발행한 서비스가 자기 이벤트를 받음, 10번) | `order.mail.order-accepted` |
 | DLX (dead letter exchange) | `<받는 서비스>.dlx` (서비스당 1개, direct) | `delivery.dlx` |
 | DLQ | `<큐>.dlq`, 라우팅 키 = 원래 큐 이름 | `delivery.order-accepted.dlq` |
 
@@ -212,7 +214,7 @@ logging:
 @Bean
 Declarables orderAcceptedQueues() {
     String queue = "delivery.order-accepted", dlx = "delivery.dlx";
-    TopicExchange events = new TopicExchange("baedalssak.events");
+    TopicExchange events = new TopicExchange("baedalsak.events");
     DirectExchange deadLetterExchange = new DirectExchange(dlx);
     Queue main = QueueBuilder.durable(queue)
             .deadLetterExchange(dlx)
@@ -281,7 +283,7 @@ UPDATE outbox SET published_at = now() WHERE id = ANY(:ackedIds);
 
 ```java
 CorrelationData cd = new CorrelationData(eventId);
-rabbitTemplate.convertAndSend("baedalssak.events", routingKey, payload, m -> {
+rabbitTemplate.convertAndSend("baedalsak.events", routingKey, payload, m -> {
     m.getMessageProperties().setMessageId(eventId);   // + eventType, eventVersion, occurredAt, traceId
     return m;
 }, cd);
@@ -451,7 +453,7 @@ docker compose --profile apps up -d --build store    # store만 다시 빌드
 - gateway 경유: `curl http://localhost:8080/v1/stores` (K8s Ingress 경유는 `/api/v1/stores`)
 - DB 목록: `docker compose exec postgres psql -U admin -d baedalsak -c "\l"` → `member`, `store`, `orders`, `payment`, `delivery`
 - Flyway 적용 확인: `docker compose exec postgres psql -U admin -d store -c "\dt store.*"` → `flyway_schema_history` + 내 테이블
-- RabbitMQ 관리 화면: `http://localhost:15672` (Exchanges 에 `baedalssak.events`, Queues 에서 `<큐>.dlq` 메시지 수)
+- RabbitMQ 관리 화면: `http://localhost:15672` (Exchanges 에 `baedalsak.events`, Queues 에서 `<큐>.dlq` 메시지 수)
 - 추적: `docker compose logs | grep <traceId>` → gateway·서비스·MQ 소비 로그가 같은 traceId
 - 로컬 DB 초기화(데이터 삭제): `docker compose down -v`
 
@@ -481,7 +483,7 @@ Ingress 가 `/api` 를 떼고 gateway 에 넘깁니다 (`/api/v1/stores` → `/v
 - [ ] `application.yml`이 3번 표의 환경 변수 이름을 쓴다 (예시 그대로 복사 권장)
 - [ ] 비밀값(`DB_PASSWORD`, `JWT_SECRET`, `TOSS_SECRET_KEY`) 기본값이 코드에 없다
 - [ ] (DB 사용 서비스) 첫 테이블은 `db/migration/V1__<서비스>_schema.sql`, JPA `ddl-auto: validate`, `open-in-view: false`
-- [ ] (메시지를 받는 서비스) 큐를 `baedalssak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
+- [ ] (메시지를 받는 서비스) 큐를 `baedalsak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
 - [ ] (이벤트를 보내는 서비스) Outbox + `FOR UPDATE SKIP LOCKED` + 발행 확인(ack·return) 후 `published_at`, `messageId = eventId`
 - [ ] 컨트롤러 경로가 `/v1/...` 이고 내부 API 는 `/internal/...` 이다
 - [ ] 로그가 stdout JSON 으로만 나가고 휴대폰 번호는 마스킹한다
@@ -534,8 +536,55 @@ Ingress 가 `/api` 를 떼고 gateway 에 넘깁니다 (`/api/v1/stores` → `/v
 
 ## 10. 메일 발송 (알림 서비스 대신)
 
-notification 서비스·DB 는 없습니다. 메일이 필요한 서비스가 **`@Async` 로 AWS SES 를 직접 호출**합니다 (예정).
+notification 서비스·DB 는 없습니다. **이벤트를 발행한 서비스가, 자기가 발행한 그 이벤트를 자기 메일 큐로 다시 받아** AWS SES 로 메일을 보냅니다 (설계서 '이벤트 목록' 탭).
 
-- 요청 처리 스레드를 막지 않도록 `@Async` + 전용 스레드 풀(`@EnableAsync`)을 둡니다. SES 실패가 주문·결제를 실패시키지 않게 합니다 (N2.2).
-- 로컬(`local` 프로필)은 실제 발송 대신 로그만 남깁니다 (N5.6). 운영 SES 권한은 IRSA.
-- SES 재시도(3회)·발송 결과 기록 방식은 서비스 구현 단계에서 정합니다.
+- 2026-10-22 수정: 이전 안(요청 처리 중 `@Async` 로 SES 직접 호출)을 폐기하고 메일 큐 방식으로 확정
+
+### 10-1. 흐름 (결제 예)
+
+```
+[payment 서비스]
+① 결제 승인 API 처리
+   payment 테이블 APPROVED + outbox 행 저장 (같은 트랜잭션) → 고객에게 바로 응답
+② outbox 발행기 → RabbitMQ baedalsak.events 에 PaymentApproved 발행 (3-2)
+③ 이 이벤트가 두 큐로 복사됨
+   - order.payment-approved          → order 서비스가 받음 (주문 상태 결제완료)
+   - payment.mail.payment-approved   ← 자기 메일 큐: 발행한 payment 가 다시 받음
+④ payment 의 메일 리스너가 이 큐에서 꺼내 SES 로 메일 발송 → 끝나면 ack
+```
+
+### 10-2. 비동기·동기 구간
+
+**요청 기준으로는 비동기, 메일 리스너 안에서는 동기**입니다.
+
+| 구간 | 방식 | 이유 |
+|---|---|---|
+| API 요청 → 메일 발송 | **비동기** (큐 경유) | API 는 메일을 기다리지 않고 응답합니다. SES 가 느리거나 장애가 나도 결제·주문은 성공하고(N2.2), 메일은 큐에 남아 재시도되다 끝내 실패하면 DLQ 로 갑니다 |
+| 리스너 안 SES 호출 | **동기** (`@Async` 사용 금지) | 리스너가 SES 발송을 끝낸 뒤 ack 합니다. `@Async` 를 쓰면 리스너가 바로 끝나 발송 전에 ack 되어, 발송이 실패해도 메시지가 사라지고 재시도 시 중복 발송이 생깁니다 |
+
+### 10-3. 메일 큐 목록
+
+| 발행 서비스 | 이벤트 (라우팅 키) | 메일 큐 | 받는 사람 | 메일 |
+|---|---|---|---|---|
+| payment | PaymentApproved (`payment.approved`) | `payment.mail.payment-approved` | 고객·사장님 | 결제완료 |
+| order | OrderAccepted (`order.accepted`) | `order.mail.order-accepted` | 고객 | 조리 시작 |
+| delivery | DeliveryAssigned (`delivery.assigned`) | `delivery.mail.delivery-assigned` | 고객·사장님 | 배차 완료 |
+| delivery | DeliveryPickedUp (`delivery.picked_up`) | `delivery.mail.delivery-picked-up` | 고객 | 배달 시작 |
+| delivery | DeliveryCompleted (`delivery.completed`) | `delivery.mail.delivery-completed` | 고객·사장님 | 배달 완료 |
+
+- 메일 큐도 업무 큐처럼 발행 서비스가 앱 코드(`@Bean`)로 `baedalsak.events` 에 바인딩해 선언합니다 (3-1).
+- 자기 이벤트를 받는 구조이므로 **Outbox 발행기(3-2)가 먼저 있어야** 메일이 나갑니다.
+
+### 10-4. 메일 리스너 규칙
+
+| 규칙 | 이유 |
+|---|---|
+| 리스너 메서드 안에서 SES 를 **동기** 호출, `@Async` 사용 금지 | 발송이 끝나야 ack (10-2) |
+| 동시성 1 · prefetch 1 | 메일은 순서대로 한 건씩. 파드가 죽어도 재전달은 1건 |
+| `mail_log` 에 `(event_id, recipient)` 를 먼저 INSERT(`SENDING`)로 선점하고, 선점에 성공했을 때만 발송 → 성공하면 `SENT` | 재전달·파드 종료로 같은 메일이 두 번 나가지 않게 (N2.4). 고객·사장님 2명이면 2행 |
+| 일시 오류(SES 쓰로틀링·네트워크)는 3회 재시도(2초, ×2) 후 DLQ, 영구 오류(잘못된 주소 등)는 바로 DLQ | 설계서 N1.4. DLQ 는 수동 확인 (3-1) |
+| 수신자 이메일은 이벤트 페이로드에 포함 | 메일을 보낼 때 member 를 호출하지 않음 (설계서 '서비스 경계' 원칙) |
+| 로컬(`local` 프로필)은 실제 발송 대신 로그만, 운영은 SES 실발송 (샌드박스는 인증된 수신자만) | N5.6 |
+| 운영 SES 권한은 IRSA, 리전은 `AWS_REGION` | 코드에 자격 증명을 넣지 않음 (3번) |
+
+- `mail_log` 테이블 구조는 설계서 '테이블 정의서' 탭 (order·payment·delivery 세 DB 동일).
