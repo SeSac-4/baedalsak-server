@@ -14,6 +14,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 
 /**
@@ -76,8 +77,25 @@ public class Store {
         return new Store(ownerId, name, category, address, minOrderAmount, deliveryFee);
     }
 
+    public void update(String name, Category category, String address, Integer minOrderAmount, Integer deliveryFee) {
+        this.name = name;
+        this.category = category;
+        this.address = address;
+        this.minOrderAmount = minOrderAmount;
+        this.deliveryFee = deliveryFee;
+    }
+
+    public void changeOperationStatus(OperationStatus operationStatus) {
+        this.operationStatus = operationStatus;
+    }
+
     public boolean isOwnedBy(Long memberId) {
         return ownerId.equals(memberId);
+    }
+
+    // 영업 여부 = 정상 운영 AND 현재 시각이 오늘 영업시간 안 (1.4.2)
+    public boolean isOpenAt(BusinessHour todayHour, LocalTime now) {
+        return operationStatus == OperationStatus.OPEN && todayHour.isOpenAt(now);
     }
 
     @PrePersist

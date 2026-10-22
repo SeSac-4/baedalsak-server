@@ -60,11 +60,23 @@ public class BusinessHour {
         return open(storeId, dayOfWeek, DEFAULT_OPEN_TIME, DEFAULT_CLOSE_TIME);
     }
 
+    // 영업시간 설정 (1.4.2). 휴무면 시간을 비운다
+    public void change(LocalTime openTime, LocalTime closeTime, boolean closed) {
+        this.openTime = closed ? null : openTime;
+        this.closeTime = closed ? null : closeTime;
+        this.closed = closed;
+    }
+
+    // 오픈 시각 이상, 마감 시각 미만
+    public boolean isOpenAt(LocalTime now) {
+        return !closed && !now.isBefore(openTime) && now.isBefore(closeTime);
+    }
+
     public DayOfWeek getDay() {
         return dayOfWeek == 0 ? DayOfWeek.SUNDAY : DayOfWeek.of(dayOfWeek);
     }
 
-    static short toDbValue(DayOfWeek dayOfWeek) {
+    public static short toDbValue(DayOfWeek dayOfWeek) {
         return (short) (dayOfWeek.getValue() % 7);
     }
 }
