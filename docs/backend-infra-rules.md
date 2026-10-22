@@ -202,7 +202,7 @@ logging:
 
 | 대상 | 이름 규칙 | 예 (delivery 가 주문 수락 이벤트를 받음) |
 |---|---|---|
-| 이벤트 exchange | **`baedalssak.events`** (topic, 전 서비스 공용 1개) | — |
+| 이벤트 exchange | **`baedalsak.events`** (topic, 전 서비스 공용 1개) | — |
 | 라우팅 키 | `<발행 도메인>.<사건>` | `order.accepted` |
 | 큐 | `<받는 서비스>.<이벤트>` (받는 쪽이 선언·소유) | `delivery.order-accepted` |
 | DLX (dead letter exchange) | `<받는 서비스>.dlx` (서비스당 1개, direct) | `delivery.dlx` |
@@ -212,7 +212,7 @@ logging:
 @Bean
 Declarables orderAcceptedQueues() {
     String queue = "delivery.order-accepted", dlx = "delivery.dlx";
-    TopicExchange events = new TopicExchange("baedalssak.events");
+    TopicExchange events = new TopicExchange("baedalsak.events");
     DirectExchange deadLetterExchange = new DirectExchange(dlx);
     Queue main = QueueBuilder.durable(queue)
             .deadLetterExchange(dlx)
@@ -281,7 +281,7 @@ UPDATE outbox SET published_at = now() WHERE id = ANY(:ackedIds);
 
 ```java
 CorrelationData cd = new CorrelationData(eventId);
-rabbitTemplate.convertAndSend("baedalssak.events", routingKey, payload, m -> {
+rabbitTemplate.convertAndSend("baedalsak.events", routingKey, payload, m -> {
     m.getMessageProperties().setMessageId(eventId);   // + eventType, eventVersion, occurredAt, traceId
     return m;
 }, cd);
@@ -451,7 +451,7 @@ docker compose --profile apps up -d --build store    # store만 다시 빌드
 - gateway 경유: `curl http://localhost:8080/v1/stores` (K8s Ingress 경유는 `/api/v1/stores`)
 - DB 목록: `docker compose exec postgres psql -U admin -d baedalsak -c "\l"` → `member`, `store`, `orders`, `payment`, `delivery`
 - Flyway 적용 확인: `docker compose exec postgres psql -U admin -d store -c "\dt store.*"` → `flyway_schema_history` + 내 테이블
-- RabbitMQ 관리 화면: `http://localhost:15672` (Exchanges 에 `baedalssak.events`, Queues 에서 `<큐>.dlq` 메시지 수)
+- RabbitMQ 관리 화면: `http://localhost:15672` (Exchanges 에 `baedalsak.events`, Queues 에서 `<큐>.dlq` 메시지 수)
 - 추적: `docker compose logs | grep <traceId>` → gateway·서비스·MQ 소비 로그가 같은 traceId
 - 로컬 DB 초기화(데이터 삭제): `docker compose down -v`
 
@@ -481,7 +481,7 @@ Ingress 가 `/api` 를 떼고 gateway 에 넘깁니다 (`/api/v1/stores` → `/v
 - [ ] `application.yml`이 3번 표의 환경 변수 이름을 쓴다 (예시 그대로 복사 권장)
 - [ ] 비밀값(`DB_PASSWORD`, `JWT_SECRET`, `TOSS_SECRET_KEY`) 기본값이 코드에 없다
 - [ ] (DB 사용 서비스) 첫 테이블은 `db/migration/V1__<서비스>_schema.sql`, JPA `ddl-auto: validate`, `open-in-view: false`
-- [ ] (메시지를 받는 서비스) 큐를 `baedalssak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
+- [ ] (메시지를 받는 서비스) 큐를 `baedalsak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
 - [ ] (이벤트를 보내는 서비스) Outbox + `FOR UPDATE SKIP LOCKED` + 발행 확인(ack·return) 후 `published_at`, `messageId = eventId`
 - [ ] 컨트롤러 경로가 `/v1/...` 이고 내부 API 는 `/internal/...` 이다
 - [ ] 로그가 stdout JSON 으로만 나가고 휴대폰 번호는 마스킹한다
