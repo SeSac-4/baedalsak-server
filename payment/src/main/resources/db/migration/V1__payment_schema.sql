@@ -31,9 +31,8 @@ CREATE TABLE payment (
         status <> 'APPROVED' OR (toss_payment_key IS NOT NULL AND approved_at IS NOT NULL))
 );
 
--- 내 결제 목록 조회: 승인된 결제만, 승인 시각 최신순
-CREATE INDEX payment_customer_approved_idx ON payment (customer_id, approved_at DESC)
-    WHERE status = 'APPROVED';
+-- 내 결제 목록 조회: 전체 결제, 생성 시각 최신순
+CREATE INDEX payment_customer_idx ON payment (customer_id, created_at DESC);
 
 -- payment_outbox: 결제 승인 이벤트를 RabbitMQ 로 보내기 전에 저장 (order_outbox 와 같은 구조)
 CREATE TABLE payment_outbox (
