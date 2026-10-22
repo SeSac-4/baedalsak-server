@@ -2,6 +2,7 @@ package com.baedalsak.store.repository;
 
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.domain.Store;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -13,5 +14,5 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     boolean existsByOwnerId(Long ownerId);
 
-    List<Store> findAllByCategory(Category category);
+    List<Store> findAllByCategory(Category category, Sort sort);
 }
