@@ -49,7 +49,7 @@ public abstract class IntegrationTest {
     protected MockMvc mockMvc;
 
     @Autowired
-    JdbcTemplate jdbcTemplate;
+    protected JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void cleanUp() {
