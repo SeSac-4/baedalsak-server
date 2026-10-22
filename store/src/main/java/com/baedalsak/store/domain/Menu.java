@@ -66,6 +66,21 @@ public class Menu {
         return new Menu(storeId, name, description, price);
     }
 
+    public void update(String name, String description, Integer price) {
+        this.name = name;
+        this.description = description;
+        this.price = price;
+    }
+
+    public void changeSaleStatus(SaleStatus saleStatus) {
+        this.saleStatus = saleStatus;
+    }
+
+    // soft delete. 주문 이력이 menu_id 를 참조하므로 행은 남긴다
+    public void delete(OffsetDateTime now) {
+        this.deletedAt = now;
+    }
+
     public boolean isDeleted() {
         return deletedAt != null;
     }

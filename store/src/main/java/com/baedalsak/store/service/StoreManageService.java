@@ -1,7 +1,6 @@
 package com.baedalsak.store.service;
 
 import com.baedalsak.store.common.auth.LoginMember;
-import com.baedalsak.store.common.auth.MemberRole;
 import com.baedalsak.store.common.error.BusinessException;
 import com.baedalsak.store.common.error.ErrorCode;
 import com.baedalsak.store.domain.BusinessHour;
@@ -35,12 +34,13 @@ public class StoreManageService {
 
     private final StoreRepository storeRepository;
     private final BusinessHourRepository businessHourRepository;
+    private final StoreOwnership storeOwnership;
     private final Clock clock;
 
     // 영업시간 7행(09:00~22:00)을 함께 만들고, 운영 상태는 임시 중지로 시작한다
     @Transactional
     public StoreDetailResponse create(LoginMember member, StoreUpsertRequest request) {
-        requireOwner(member);
+        storeOwnership.requireOwner(member);
         if (storeRepository.existsByOwnerId(member.id())) {
             throw new BusinessException(ErrorCode.STORE_ALREADY_EXISTS);
         }
@@ -61,7 +61,7 @@ public class StoreManageService {
 
     @Transactional
     public StoreDetailResponse update(LoginMember member, Long storeId, StoreUpsertRequest request) {
-        Store store = getOwnedStore(member, storeId);
+        Store store = storeOwnership.getOwnedStore(member, storeId);
         store.update(request.name(), request.category(), request.address(),
                 request.minOrderAmount(), request.deliveryFee());
         return toDetail(store);
@@ -69,7 +69,7 @@ public class StoreManageService {
 
     @Transactional
     public StoreDetailResponse changeOperationStatus(LoginMember member, Long storeId, OperationStatusRequest request) {
-        Store store = getOwnedStore(member, storeId);
+        Store store = storeOwnership.getOwnedStore(member, storeId);
         store.changeOperationStatus(request.operationStatus());
         return toDetail(store);
     }
@@ -77,7 +77,7 @@ public class StoreManageService {
     // 7개 요일을 한 번에 교체한다
     @Transactional
     public StoreDetailResponse replaceBusinessHours(LoginMember member, Long storeId, BusinessHoursRequest request) {
-        Store store = getOwnedStore(member, storeId);
+        Store store = storeOwnership.getOwnedStore(member, storeId);
         Map<Short, BusinessHour> hours = businessHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId).stream()
                 .collect(Collectors.toMap(BusinessHour::getDayOfWeek, Function.identity()));
         for (BusinessHoursRequest.BusinessHourRequest row : request.businessHours()) {
@@ -85,24 +85,6 @@ public class StoreManageService {
                     .change(row.openTime(), row.closeTime(), row.isClosed());
         }
         return toDetail(store);
-    }
-
-    // 역할은 gateway 가 검증하지만, 가게 등록·관리는 사장님만 가능하도록 한 번 더 막는다
-    private void requireOwner(LoginMember member) {
-        if (member.role() != MemberRole.OWNER) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-    }
-
-    // 소유권은 서비스가 검증한다 (N4.2). 내 가게가 아니면 403
-    private Store getOwnedStore(LoginMember member, Long storeId) {
-        requireOwner(member);
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
-        if (!store.isOwnedBy(member.id())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return store;
     }
 
     private StoreDetailResponse toDetail(Store store) {
