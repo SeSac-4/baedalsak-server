@@ -28,7 +28,7 @@ public class GlobalExceptionHandler {
   //서비스 코드에서 던진 BusinessException
   @ExceptionHandler (BusinessException.class)
   public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
-    return build(e.getErrorCode(), null);
+    return build(e.getErrorCode(), e.getErrors());
 
   }
 

@@ -1,1 +1,2 @@
 com.baedalsak.common.error.CommonWebAutoConfiguration
+com.baedalsak.common.auth.CommonAuthAutoConfiguration

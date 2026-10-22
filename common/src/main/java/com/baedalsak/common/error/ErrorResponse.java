@@ -2,10 +2,14 @@ package com.baedalsak.common.error;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+
 
 public record ErrorResponse(
         String code,
         String message,
+        @JsonInclude (JsonInclude.Include.NON_EMPTY)
         List<FieldErrorDetail> errors,   // 검증 실패일 때만 값이 있고, 아니면 null
         String traceId
 ) {
