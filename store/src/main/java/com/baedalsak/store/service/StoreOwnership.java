@@ -1,9 +1,9 @@
 package com.baedalsak.store.service;
 
-import com.baedalsak.store.common.auth.LoginMember;
-import com.baedalsak.store.common.auth.MemberRole;
-import com.baedalsak.store.common.error.BusinessException;
-import com.baedalsak.store.common.error.ErrorCode;
+import com.baedalsak.common.auth.LoginMember;
+import com.baedalsak.common.auth.MemberRole;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
