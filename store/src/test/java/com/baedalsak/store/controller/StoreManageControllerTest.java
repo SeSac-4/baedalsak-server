@@ -204,12 +204,17 @@ class StoreManageControllerTest extends IntegrationTest {
         }
 
         @Test
-        void 마감이_오픈보다_빠르면_400() throws Exception {
+        void 마감이_오픈보다_빨라도_저장되지만_영업시간_안으로_보지_않는다() throws Exception {
             createStore(OWNER_ID);
+            changeStatus(OWNER_ID, "OPEN");
 
+            // 설계서에 자정을 넘기는 영업 규칙이 없다. 저장은 되지만 "오픈 이상 AND 마감 미만" 인 시각이 없어 항상 영업 종료
             replaceHours(OWNER_ID, week("""
-                    {"dayOfWeek":4,"openTime":"22:00","closeTime":"09:00","isClosed":false}"""))
-                    .andExpect(status().isBadRequest());
+                    {"dayOfWeek":4,"openTime":"10:00","closeTime":"02:00","isClosed":false}"""))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.todayHour.openTime").value("10:00"))
+                    .andExpect(jsonPath("$.todayHour.closeTime").value("02:00"))
+                    .andExpect(jsonPath("$.isOpenNow").value(false));
         }
 
         @Test
