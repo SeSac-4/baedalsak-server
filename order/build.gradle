@@ -1,12 +1,23 @@
 // 루트 build.gradle이 Java 21 / Spring Boot BOM / actuator / tracing-brave /
 // lombok 을 이미 넣어 준다 (docs 2번). 여기에는 이 서비스에만 필요한 것만 적는다.
 dependencies {
+    // 공통 모듈: 에러 응답 {code, message, errors, traceId}, @CurrentMember 요청자 헤더, 로그 마스킹 (자동 설정)
+    implementation project(':common')
+
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'      // Boot 4 이름 (구 starter-web)
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'      // Boot 4: Flyway 자동 실행에 필요 (docs 4-1)
     implementation 'org.flywaydb:flyway-database-postgresql'                  // Flyway 10+ 는 DB별 모듈 필요
     implementation 'org.springframework.boot:spring-boot-starter-amqp'        // RabbitMQ (docs 3-1)
+    // [내부] 동기 호출 클라이언트 (store·member). Boot 가 만든 RestClient.Builder 를 써야 traceId 가 HTTP 헤더로 전파됨 (docs 6-2)
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
 
     runtimeOnly 'org.postgresql:postgresql'
+
+    // 통합 테스트: MockMvc + 실제 PostgreSQL 컨테이너 (N6.5). 실행하려면 Docker 필요
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
