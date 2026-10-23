@@ -45,14 +45,14 @@ public class MenuService {
     public MenuResponse create(LoginMember member, Long storeId, MenuUpsertRequest request) {
         storeOwnership.getOwnedStore(member, storeId);
         Menu menu = menuRepository.save(
-                Menu.create(storeId, request.name(), request.normalizedDescription(), request.price()));
+                Menu.create(storeId, request.name(), request.description(), request.price()));
         return MenuResponse.from(menu);
     }
 
     @Transactional
     public MenuResponse update(LoginMember member, Long storeId, Long menuId, MenuUpsertRequest request) {
         Menu menu = getOwnedMenu(member, storeId, menuId);
-        menu.update(request.name(), request.normalizedDescription(), request.price());
+        menu.update(request.name(), request.description(), request.price());
         return MenuResponse.from(menu);
     }
 

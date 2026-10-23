@@ -13,7 +13,7 @@ public record MenuUpsertRequest(
         @Size(max = 100, message = "메뉴 이름은 100자 이하로 입력해 주세요.")
         String name,
 
-        // 선택. 비어 있으면 null 로 저장
+        // 선택
         @Size(max = 500, message = "메뉴 설명은 500자 이하로 입력해 주세요.")
         String description,
 
@@ -21,8 +21,4 @@ public record MenuUpsertRequest(
         @Positive(message = "가격은 0원보다 커야 합니다.")
         Integer price
 ) {
-
-    public String normalizedDescription() {
-        return description == null || description.isBlank() ? null : description.strip();
-    }
 }
