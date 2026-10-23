@@ -43,26 +43,26 @@ public class GlobalExceptionHandler {
     List<FieldErrorDetail> errors = e.getBindingResult().getFieldErrors().stream()
     .map(f -> new FieldErrorDetail(f.getField(), f.getDefaultMessage()))
     .toList();
-    return build(ErrorCode.VALIDATION_FAILED, errors);
+    return build(CommonErrorCode.VALIDATION_FAILED, errors);
   }
 
   //JSON 형식 오류, enum에 없는 값 등..
   @ExceptionHandler (HttpMessageNotReadableException.class)
   public ResponseEntity<ErrorResponse> handleNotReadable (HttpMessageNotReadableException e){
-  return build(ErrorCode.VALIDATION_FAILED, null);
+  return build(CommonErrorCode.VALIDATION_FAILED, null);
   }
 
   //경로·쿼리 값 타입 오류 (예: /stores/abc 처럼 숫자 자리에 문자)
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
   public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-    return build(ErrorCode.VALIDATION_FAILED,
+    return build(CommonErrorCode.VALIDATION_FAILED,
         List.of(new FieldErrorDetail(e.getName(), "값의 형식이 올바르지 않습니다.")));
   }
 
   //필수 쿼리 파라미터 없음
   @ExceptionHandler(MissingServletRequestParameterException.class)
   public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
-    return build(ErrorCode.VALIDATION_FAILED,
+    return build(CommonErrorCode.VALIDATION_FAILED,
         List.of(new FieldErrorDetail(e.getParameterName(), "필수 값입니다.")));
   }
 
@@ -75,7 +75,7 @@ public class GlobalExceptionHandler {
       return new FieldErrorDetail(path.substring(path.lastIndexOf('.') + 1), v.getMessage());
     })
     .toList();
-    return build(ErrorCode.VALIDATION_FAILED, errors);
+    return build(CommonErrorCode.VALIDATION_FAILED, errors);
   }
 
   //위와 같은 검증 실패인데 컨트롤러에 @Validated가 없을 때 (Spring 6.1+ 기본 방식)
@@ -85,26 +85,26 @@ public class GlobalExceptionHandler {
     .flatMap(r -> r.getResolvableErrors().stream()
         .map(err -> new FieldErrorDetail(r.getMethodParameter().getParameterName(), err.getDefaultMessage())))
     .toList();
-    return build(ErrorCode.VALIDATION_FAILED, errors);
+    return build(CommonErrorCode.VALIDATION_FAILED, errors);
   }
 
   //허용되지 않는 HTTP 메서드 (예: 조회 전용 경로에 POST). 없으면 아래 Exception 처리기가 500으로 바꿔 버림
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-    return build(ErrorCode.METHOD_NOT_ALLOWED, null);
+    return build(CommonErrorCode.METHOD_NOT_ALLOWED, null);
   }
 
   /** 존재하지 않는 경로 */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e) {
-        return build(ErrorCode.NOT_FOUND, null);
+        return build(CommonErrorCode.NOT_FOUND, null);
     }
 
     /** 위에서 못 잡은 모든 예외: 내용은 로그로만 남기고 응답에는 일반 메시지만 */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         log.error("처리되지 않은 예외", e);
-        return build(ErrorCode.INTERNAL_ERROR, null);
+        return build(CommonErrorCode.INTERNAL_ERROR, null);
     }
   
 
