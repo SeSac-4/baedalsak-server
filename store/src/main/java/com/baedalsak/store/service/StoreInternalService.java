@@ -1,7 +1,7 @@
 package com.baedalsak.store.service;
 
-import com.baedalsak.store.common.error.BusinessException;
-import com.baedalsak.store.common.error.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.BusinessHourId;
 import com.baedalsak.store.domain.Store;

@@ -1,6 +1,6 @@
 package com.baedalsak.store.controller;
 
-import com.baedalsak.store.common.auth.LoginMember;
+import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.store.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
