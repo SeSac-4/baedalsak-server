@@ -8,6 +8,7 @@
 - v3 수정 2026-10-16: Spring Boot 4, 서비스 6개(user → **member**, notification 제거), RDS 인스턴스 1개 + **서비스별 DB 5개**, RabbitMQ 4.2 + vhost·TLS·exchange·발행 확인, Flyway(Boot 4 starter), JPA, Outbox, 분산 추적(Zipkin), JSON 로그, KST, 비밀값 이름, `*_SERVICE_URL`, `/api/v*` 라우팅, DynamoDB 주석 처리(9-1)
 - 2026-10-16 추가: 관측성(Zipkin·Prometheus·Grafana·Fluent Bit)은 **후순위 — 주석 처리** (9-2). traceId 로그 추적은 유지
 - 2026-10-22 수정: 메일 발송을 `@Async` 직접 호출 → **자기 메일 큐 + 동기 리스너**로 확정 (10번), 메일 큐 이름 규칙 추가 (3-1)
+- 2026-10-22 수정: Outbox 발행기·이벤트 소비자는 공통 모듈이 아니라 **각 서비스에서 구현**으로 확정, 서비스 간 통일 규칙 추가 (3-3)
 - 관련 파일: `Dockerfile`, `.dockerignore`, `compose.yaml`, `.env.example`, `docker/local/postgres/init/`
 - 동작 예시: `smoke-test/` (이 규칙대로 만든 검증용 6개 모듈, 저장소 미포함)
 
@@ -291,7 +292,30 @@ boolean ok = cd.getFuture().get(5, TimeUnit.SECONDS).ack() && cd.getReturned() =
 ```
 
 - 발행기가 같은 행을 두 번 보낼 수는 있습니다 (ack 직후 파드가 죽는 경우). 그래서 받는 쪽 멱등(3-1)은 여전히 필수입니다.
-- 테이블 구조는 설계서 '테이블 정의서' 탭 (`outbox`, `processed_event`). 발행기·소비자 코드는 공통 모듈(N6.2).
+- 테이블 구조는 설계서 '테이블 정의서' 탭 (`outbox`, `processed_event`, `mail_log`).
+
+### 3-3. 발행기·소비자는 각 서비스에서 구현 (2026-10-22 결정)
+
+Outbox 발행기·이벤트 소비자·메일 리스너는 **공통 모듈 없이 각 서비스 안에** 만듭니다 (설계서 '테이블 정의서' 탭 공통 규칙, N6.2 — 공통 모듈에는 예외 포맷·로깅 설정·이벤트 DTO·traceId 유틸만).
+
+| 서비스 | 발행기 (outbox) | 이벤트 소비자 (processed_event) | 메일 리스너 (mail_log, 10번) |
+|---|:-:|:-:|:-:|
+| order | ✓ OrderAccepted | ✓ PaymentApproved · Delivery 3종 | ✓ |
+| payment | ✓ PaymentApproved | — | ✓ |
+| delivery | ✓ Delivery 3종 | ✓ OrderAccepted | ✓ |
+
+코드는 서비스마다 따로 있지만 **아래는 세 서비스가 똑같이** 맞춥니다. 다르면 이벤트가 전달되지 않거나 중복 처리됩니다.
+
+| 통일할 것 | 기준 |
+|---|---|
+| 테이블 이름·구조 | `outbox` / `processed_event` / `mail_log` — 설계서 '테이블 정의서' 탭 그대로. 이름에 서비스 접두사를 붙이지 않음 (~~`payment_outbox`~~) |
+| 발행기 동작 | 3-2 그대로: 1초 폴링, `FOR UPDATE SKIP LOCKED`, confirm ack 이고 return 이 없을 때만 `published_at` |
+| 메시지 헤더 | 3-1 그대로: `messageId` = eventId(UUID), `eventType`, `eventVersion`, `occurredAt`, `traceId` |
+| 소비자 멱등 | `processed_event`(PK = messageId) INSERT 에 성공했을 때만 처리. messageId 가 없거나 UUID 가 아니면 거부 → DLQ |
+| 이름 | exchange `baedalsak.events` (~~`baedalssak.events`~~), 큐 `<받는 서비스>.<이벤트>`, 메일 큐 `<발행 서비스>.mail.<이벤트>`, DLQ `<큐>.dlq` |
+| 이벤트 페이로드 | 설계서 '이벤트 목록' 탭의 필드 이름 그대로. 받는 쪽은 모르는 필드를 무시 (`JacksonJsonMessageConverter`) |
+
+- 발행·소비 로직을 바꿀 때는 다른 두 서비스에도 같은 변경이 필요한지 PR 에 적어 주세요.
 
 ---
 
@@ -485,6 +509,7 @@ Ingress 가 `/api` 를 떼고 gateway 에 넘깁니다 (`/api/v1/stores` → `/v
 - [ ] (DB 사용 서비스) 첫 테이블은 `db/migration/V1__<서비스>_schema.sql`, JPA `ddl-auto: validate`, `open-in-view: false`
 - [ ] (메시지를 받는 서비스) 큐를 `baedalsak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
 - [ ] (이벤트를 보내는 서비스) Outbox + `FOR UPDATE SKIP LOCKED` + 발행 확인(ack·return) 후 `published_at`, `messageId = eventId`
+- [ ] (이벤트를 주고받는 서비스) 테이블 이름 `outbox`·`processed_event`·`mail_log`, exchange `baedalsak.events` (3-3)
 - [ ] 컨트롤러 경로가 `/v1/...` 이고 내부 API 는 `/internal/...` 이다
 - [ ] 로그가 stdout JSON 으로만 나가고 휴대폰 번호는 마스킹한다
 - [ ] `docker compose --profile apps up -d --build <서비스>` 후 `/actuator/health`가 UP이다
