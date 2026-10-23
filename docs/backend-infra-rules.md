@@ -8,6 +8,8 @@
 - v3 수정 2026-10-16: Spring Boot 4, 서비스 6개(user → **member**, notification 제거), RDS 인스턴스 1개 + **서비스별 DB 5개**, RabbitMQ 4.2 + vhost·TLS·exchange·발행 확인, Flyway(Boot 4 starter), JPA, Outbox, 분산 추적(Zipkin), JSON 로그, KST, 비밀값 이름, `*_SERVICE_URL`, `/api/v*` 라우팅, DynamoDB 주석 처리(9-1)
 - 2026-10-16 추가: 관측성(Zipkin·Prometheus·Grafana·Fluent Bit)은 **후순위 — 주석 처리** (9-2). traceId 로그 추적은 유지
 - 2026-10-22 수정: 메일 발송을 `@Async` 직접 호출 → **자기 메일 큐 + 동기 리스너**로 확정 (10번), 메일 큐 이름 규칙 추가 (3-1)
+- 2026-10-22 수정: Outbox 발행기·이벤트 소비자는 공통 모듈이 아니라 **각 서비스에서 구현**으로 확정, 서비스 간 통일 규칙 추가 (3-3)
+- 2026-10-23 수정: 설계서 v4 반영 — 큐·DLQ quorum 선언(3-1), 메일 수신자 `customerEmail`·`ownerEmail` 스냅샷·메일 큐 `deliveryLimit`(10-4), AWS 권한 IRSA → Pod Identity 표기, 공통 모듈은 추후 생성(3-3)
 - 관련 파일: `Dockerfile`, `.dockerignore`, `compose.yaml`, `.env.example`, `docker/local/postgres/init/`
 - 동작 예시: `smoke-test/` (이 규칙대로 만든 검증용 6개 모듈, 저장소 미포함)
 
@@ -108,7 +110,7 @@ implementation 'org.springframework.boot:spring-boot-starter-session-data-redis'
 
 - 🔒 = 비밀값. `.env` 에만 두고 코드·`application.yml` 에 기본값을 쓰지 않습니다. 로컬 K8s 는 `make secret` 이 `.env` 에서 6개 키를 Secret 으로 만들고, 각 서비스는 필요한 키만 받습니다 (차트 `secretKeys`). 운영은 Secrets Manager → K8s Secret (N4.6). 새 비밀값이 생기면 인프라 담당과 키 이름을 맞춰 주세요.
 - 서비스 주소 주입 대상 (compose): gateway 는 5개 전부, order 는 `STORE_SERVICE_URL`·`MEMBER_SERVICE_URL`, delivery 는 `MEMBER_SERVICE_URL` (설계서 '동기 호출' 탭). 주소를 코드에 하드코딩하지 않습니다.
-- 운영의 AWS 권한은 Access Key가 아니라 IRSA(파드별 IAM 역할)로 주입되므로, **코드에 자격 증명을 넣지 마세요.**
+- 운영의 AWS 권한은 Access Key가 아니라 EKS Pod Identity(파드별 IAM 역할, 설계서 '인프라 구성 상세' 탭)로 주입되므로, **코드에 자격 증명을 넣지 마세요.**
 - `.env` 에 `DB_NAME` 을 쓰지 마세요. VSCode(`envFile`)로 실행한 서비스가 전부 그 DB 로 붙습니다. 서비스 DB 이름은 `application.yml` 기본값을 씁니다.
 
 ### `application.yml` 작성 예시 (store 서비스, 전체)
@@ -217,10 +219,11 @@ Declarables orderAcceptedQueues() {
     TopicExchange events = new TopicExchange("baedalsak.events");
     DirectExchange deadLetterExchange = new DirectExchange(dlx);
     Queue main = QueueBuilder.durable(queue)
+            .quorum()                       // 큐는 quorum (설계서 '이벤트 목록' 탭, 인프라 구성 상세)
             .deadLetterExchange(dlx)
             .deadLetterRoutingKey(queue)
             .build();
-    Queue dlq = QueueBuilder.durable(queue + ".dlq").build();
+    Queue dlq = QueueBuilder.durable(queue + ".dlq").quorum().build();
     return new Declarables(events, deadLetterExchange, main, dlq,
             BindingBuilder.bind(main).to(events).with("order.accepted"),
             BindingBuilder.bind(dlq).to(deadLetterExchange).with(queue));
@@ -252,7 +255,8 @@ MessageConverter jsonMessageConverter() {
 | `prefetch: 10` | 1건마다 DB 트랜잭션이라 작게. 파드 2개에 고르게 분배, 파드가 죽어도 재전달 최대 10건 |
 | 처리 로직은 **같은 메시지가 두 번 와도 안전하게** (멱등) | RabbitMQ 는 at-least-once. `processed_event`(PK=eventId) 또는 UNIQUE 제약으로 보장 — 설정이 아니라 코드 몫 |
 | DLQ 에는 리스너를 붙이지 않는다 | 원인 확인 후 사람이 재처리 (MVP 수동 확인). 관리 화면 `http://localhost:15672` → Queues |
-| 이미 만들어진 큐의 인자(DLX 등)를 바꾸지 않는다 | 인자가 다르면 `PRECONDITION_FAILED` 로 앱이 시작되지 않음. 로컬은 관리 화면에서 큐 삭제 후 재시작, 운영은 인프라 담당과 협의 |
+| 큐·DLQ 는 **quorum** 으로 선언한다 (`.quorum()`) | 설계서 '이벤트 목록'·'인프라 구성 상세' 탭. 메일 큐의 `deliveryLimit` 도 quorum 전용 (10-4) |
+| 이미 만들어진 큐의 인자(DLX·큐 종류 등)를 바꾸지 않는다 | 인자가 다르면 `PRECONDITION_FAILED` 로 앱이 시작되지 않음. 로컬은 관리 화면에서 큐 삭제 후 재시작(또는 `docker compose down -v`), 운영은 인프라 담당과 협의 |
 
 ### 3-2. 이벤트 발행 — Outbox + 발행 확인 (N2.3)
 
@@ -291,7 +295,32 @@ boolean ok = cd.getFuture().get(5, TimeUnit.SECONDS).ack() && cd.getReturned() =
 ```
 
 - 발행기가 같은 행을 두 번 보낼 수는 있습니다 (ack 직후 파드가 죽는 경우). 그래서 받는 쪽 멱등(3-1)은 여전히 필수입니다.
-- 테이블 구조는 설계서 '테이블 정의서' 탭 (`outbox`, `processed_event`). 발행기·소비자 코드는 공통 모듈(N6.2).
+- 테이블 구조는 설계서 '테이블 정의서' 탭 (`outbox`, `processed_event`, `mail_log`).
+
+### 3-3. 발행기·소비자는 각 서비스에서 구현 (2026-10-22 결정)
+
+Outbox 발행기·이벤트 소비자·메일 리스너는 **공통 모듈 없이 각 서비스 안에** 만듭니다 (설계서 '테이블 정의서' 탭 공통 규칙, N6.2 — 공통 모듈에는 예외 포맷·로깅 설정·이벤트 DTO·traceId 유틸만).
+
+> 설계서 v4 N6.2: "각 서비스에서 구현 → 추후 공통 모듈 생성". 지금은 각 서비스에 만들고, 공통 모듈은 나중에 따로 만듭니다. 그때 옮기기 쉽도록 아래 통일 규칙을 지켜 주세요.
+
+| 서비스 | 발행기 (outbox) | 이벤트 소비자 (processed_event) | 메일 리스너 (mail_log, 10번) |
+|---|:-:|:-:|:-:|
+| order | ✓ OrderAccepted | ✓ PaymentApproved · Delivery 3종 | ✓ |
+| payment | ✓ PaymentApproved | — | ✓ |
+| delivery | ✓ Delivery 3종 | ✓ OrderAccepted | ✓ |
+
+코드는 서비스마다 따로 있지만 **아래는 세 서비스가 똑같이** 맞춥니다. 다르면 이벤트가 전달되지 않거나 중복 처리됩니다.
+
+| 통일할 것 | 기준 |
+|---|---|
+| 테이블 이름·구조 | `outbox` / `processed_event` / `mail_log` — 설계서 '테이블 정의서' 탭 그대로. 이름에 서비스 접두사를 붙이지 않음 (~~`payment_outbox`~~) |
+| 발행기 동작 | 3-2 그대로: 1초 폴링, `FOR UPDATE SKIP LOCKED`, confirm ack 이고 return 이 없을 때만 `published_at` |
+| 메시지 헤더 | 3-1 그대로: `messageId` = eventId(UUID), `eventType`, `eventVersion`, `occurredAt`, `traceId` |
+| 소비자 멱등 | `processed_event`(PK = messageId) INSERT 에 성공했을 때만 처리. messageId 가 없거나 UUID 가 아니면 거부 → DLQ |
+| 이름 | exchange `baedalsak.events` (~~`baedalssak.events`~~), 큐 `<받는 서비스>.<이벤트>`, 메일 큐 `<발행 서비스>.mail.<이벤트>`, DLQ `<큐>.dlq` |
+| 이벤트 페이로드 | 설계서 '이벤트 목록' 탭의 필드 이름 그대로. 받는 쪽은 모르는 필드를 무시 (`JacksonJsonMessageConverter`) |
+
+- 발행·소비 로직을 바꿀 때는 다른 두 서비스에도 같은 변경이 필요한지 PR 에 적어 주세요.
 
 ---
 
@@ -485,6 +514,7 @@ Ingress 가 `/api` 를 떼고 gateway 에 넘깁니다 (`/api/v1/stores` → `/v
 - [ ] (DB 사용 서비스) 첫 테이블은 `db/migration/V1__<서비스>_schema.sql`, JPA `ddl-auto: validate`, `open-in-view: false`
 - [ ] (메시지를 받는 서비스) 큐를 `baedalsak.events` 바인딩 + DLX·DLQ 와 함께 선언, `processed_event` 로 멱등 처리
 - [ ] (이벤트를 보내는 서비스) Outbox + `FOR UPDATE SKIP LOCKED` + 발행 확인(ack·return) 후 `published_at`, `messageId = eventId`
+- [ ] (이벤트를 주고받는 서비스) 테이블 이름 `outbox`·`processed_event`·`mail_log`, exchange `baedalsak.events` (3-3)
 - [ ] 컨트롤러 경로가 `/v1/...` 이고 내부 API 는 `/internal/...` 이다
 - [ ] 로그가 stdout JSON 으로만 나가고 휴대폰 번호는 마스킹한다
 - [ ] `docker compose --profile apps up -d --build <서비스>` 후 `/actuator/health`가 UP이다
@@ -582,9 +612,9 @@ notification 서비스·DB 는 없습니다. **이벤트를 발행한 서비스�
 | 리스너 메서드 안에서 SES 를 **동기** 호출, `@Async` 사용 금지 | 발송이 끝나야 ack (10-2) |
 | 동시성 1 · prefetch 1 | 메일은 순서대로 한 건씩. 파드가 죽어도 재전달은 1건 |
 | `mail_log` 에 `(event_id, recipient)` 를 먼저 INSERT(`SENDING`)로 선점하고, 선점에 성공했을 때만 발송 → 성공하면 `SENT` | 재전달·파드 종료로 같은 메일이 두 번 나가지 않게 (N2.4). 고객·사장님 2명이면 2행 |
-| 일시 오류(SES 쓰로틀링·네트워크)는 3회 재시도(2초, ×2) 후 DLQ, 영구 오류(잘못된 주소 등)는 바로 DLQ | 설계서 N1.4. DLQ 는 수동 확인 (3-1) |
-| 수신자 이메일은 이벤트 페이로드에 포함 | 메일을 보낼 때 member 를 호출하지 않음 (설계서 '서비스 경계' 원칙) |
+| 일시 오류(SES 쓰로틀링·네트워크)는 3회 재시도(2초, ×2) 후 DLQ, 영구 오류(잘못된 주소 등)는 바로 DLQ. 메일 큐는 `deliveryLimit 3`(quorum 큐 인자) | 설계서 N1.4·'이벤트 목록' 탭. DLX 는 업무 큐와 같은 `<서비스>.dlx` → `<큐>.dlq`, DLQ 는 수동 확인 (3-1) |
+| 수신자 이메일은 이벤트 페이로드의 `customerEmail`·`ownerEmail` 을 쓴다 | 메일 리스너는 member 를 호출하지 않음. 이메일은 order 가 주문 생성 때 member 내부 API 로 받아 `orders` 에 스냅샷하고, payment(`/internal/orders` 응답)·delivery(OrderAccepted 페이로드)도 각자 스냅샷 컬럼에 저장 (설계서 v4 '서비스 경계'·'테이블 정의서' 탭) |
 | 로컬(`local` 프로필)은 실제 발송 대신 로그만, 운영은 SES 실발송 (샌드박스는 인증된 수신자만) | N5.6 |
-| 운영 SES 권한은 IRSA, 리전은 `AWS_REGION` | 코드에 자격 증명을 넣지 않음 (3번) |
+| 운영 SES 권한은 Pod Identity(`ses:SendEmail`), 리전은 `AWS_REGION` | 코드에 자격 증명을 넣지 않음 (3번) |
 
 - `mail_log` 테이블 구조는 설계서 '테이블 정의서' 탭 (order·payment·delivery 세 DB 동일).
