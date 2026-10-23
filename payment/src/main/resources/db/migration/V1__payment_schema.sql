@@ -2,9 +2,9 @@
 -- payment 서비스 V1 스키마
 --
 -- payment        : 주문당 결제 1건. 결제 요청 금액과 토스 승인 결과 저장
--- payment_outbox : 결제 승인 이벤트(PaymentApproved)를 RabbitMQ 로 보내기 전에 저장
+-- outbox         : 결제 승인 이벤트(PaymentApproved)를 RabbitMQ 로 보내기 전에 저장
 --
--- 참고: 엑셀 설계서 v2 '테이블 정의서'(payment_db), backend-infra-rules 4-1
+-- 참고: 엑셀 설계서 v4 '테이블 정의서'(payment_db), backend-infra-rules 4-1
 -- 주의: 머지 후 이 파일은 수정하지 않는다. 변경은 V2 이후 파일로 추가
 -- =============================================================================
 
@@ -13,6 +13,11 @@ CREATE TABLE payment (
     id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_id         BIGINT       NOT NULL,
     customer_id      BIGINT       NOT NULL,
+    owner_id         BIGINT       NOT NULL,   -- 이하 5개: 결제 요청 생성 시 /internal/orders 응답 스냅샷
+    store_id         BIGINT       NOT NULL,
+    store_name       VARCHAR(100) NOT NULL,
+    customer_email   VARCHAR(255) NOT NULL,   -- 결제완료 메일 수신자 (PaymentApproved customerEmail)
+    owner_email      VARCHAR(255) NOT NULL,   -- 결제완료 메일 수신자 (PaymentApproved ownerEmail)
     toss_order_id    VARCHAR(64)  NOT NULL,
     amount           INTEGER      NOT NULL,
     status           VARCHAR(20)  NOT NULL DEFAULT 'REQUESTED',
@@ -34,8 +39,8 @@ CREATE TABLE payment (
 -- 내 결제 목록 조회: 전체 결제, 생성 시각 최신순
 CREATE INDEX payment_customer_idx ON payment (customer_id, created_at DESC);
 
--- payment_outbox: 결제 승인 이벤트를 RabbitMQ 로 보내기 전에 저장 (order_outbox 와 같은 구조)
-CREATE TABLE payment_outbox (
+-- outbox: 결제 승인 이벤트를 RabbitMQ 로 보내기 전에 저장 (order·delivery 의 outbox 와 같은 구조)
+CREATE TABLE outbox (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     event_id     UUID        NOT NULL UNIQUE,
     event_type   VARCHAR(50) NOT NULL,
@@ -48,4 +53,4 @@ CREATE TABLE payment_outbox (
 );
 
 -- 발행기가 아직 보내지 않은 행만 빠르게 찾기
-CREATE INDEX payment_outbox_unpublished_idx ON payment_outbox (id) WHERE published_at IS NULL;
+CREATE INDEX outbox_unpublished_idx ON outbox (id) WHERE published_at IS NULL;

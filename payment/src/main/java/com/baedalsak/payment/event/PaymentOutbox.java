@@ -18,7 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity 
-@Table(name = "payment_outbox")
+@Table(name = "outbox")
 @Getter 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentOutbox {
