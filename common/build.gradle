@@ -6,4 +6,6 @@ dependencies {
     // compileOnly: 컴파일할 때만 쓰고, 실제 웹 라이브러리는 이걸 가져다 쓰는 서비스가 제공한다.
     // gateway(WebFlux)에 서블릿 웹이 딸려 들어가는 걸 막는다.
     compileOnly 'org.springframework.boot:spring-boot-starter-webmvc'
+    // ConstraintViolationException(@PathVariable·@RequestParam 검증) 처리용. webmvc 서비스는 모두 validation 을 이미 씀
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
 }
