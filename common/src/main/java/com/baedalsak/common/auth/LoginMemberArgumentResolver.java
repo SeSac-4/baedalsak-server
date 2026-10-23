@@ -8,7 +8,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 
 //@CurrentMember LoginMember 파라미터를 2개의 헤더로 채운다!
 public class LoginMemberArgumentResolver implements HandlerMethodArgumentResolver {
@@ -29,13 +29,13 @@ public class LoginMemberArgumentResolver implements HandlerMethodArgumentResolve
         String id = webRequest.getHeader(LoginMember.ID_HEADER);
         String role = webRequest.getHeader(LoginMember.ROLE_HEADER);
         if (id == null || role == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
         }
         try {
             return new LoginMember(Long.valueOf(id), MemberRole.valueOf(role));
         } catch (IllegalArgumentException e) {
             // "abc"처럼 숫자가 아니거나, ADMIN처럼 없는 역할이면 여기로 옴
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
         }
     }
 }

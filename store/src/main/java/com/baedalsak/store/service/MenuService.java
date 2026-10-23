@@ -2,11 +2,11 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.Menu;
 import com.baedalsak.store.dto.request.MenuUpsertRequest;
 import com.baedalsak.store.dto.request.SaleStatusRequest;
 import com.baedalsak.store.dto.response.MenuResponse;
+import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.MenuRepository;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class MenuService {
     @Transactional(readOnly = true)
     public List<MenuResponse> getMenus(Long storeId) {
         if (!storeRepository.existsById(storeId)) {
-            throw new BusinessException(ErrorCode.STORE_NOT_FOUND);
+            throw new BusinessException(StoreErrorCode.STORE_NOT_FOUND);
         }
         return menuRepository.findAllByStoreIdAndDeletedAtIsNullOrderById(storeId).stream()
                 .map(MenuResponse::from)
@@ -73,6 +73,6 @@ public class MenuService {
     private Menu getOwnedMenu(LoginMember member, Long storeId, Long menuId) {
         storeOwnership.getOwnedStore(member, storeId);
         return menuRepository.findByIdAndStoreIdAndDeletedAtIsNull(menuId, storeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MENU_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.MENU_NOT_FOUND));
     }
 }

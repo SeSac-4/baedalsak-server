@@ -1,12 +1,12 @@
 package com.baedalsak.store.service;
 
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.BusinessHourId;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.response.MenuInternalResponse;
 import com.baedalsak.store.dto.response.StoreInternalResponse;
+import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.BusinessHourRepository;
 import com.baedalsak.store.repository.MenuRepository;
 import com.baedalsak.store.repository.StoreRepository;
@@ -51,6 +51,6 @@ public class StoreInternalService {
 
     private Store getExistingStore(Long storeId) {
         return storeRepository.findById(storeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
     }
 }

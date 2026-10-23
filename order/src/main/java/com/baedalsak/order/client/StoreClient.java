@@ -1,7 +1,7 @@
 package com.baedalsak.order.client;
 
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
@@ -39,7 +39,7 @@ public class StoreClient {
             return Optional.empty();
         } catch (RestClientException e) {
             log.warn("store 가게 조회 실패 storeId={}", storeId, e);
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+            throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
         }
     }
 
@@ -57,7 +57,7 @@ public class StoreClient {
             return Optional.empty();
         } catch (RestClientException e) {
             log.warn("store 메뉴 조회 실패 storeId={}, menuIds={}", storeId, menuIds, e);
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+            throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
         }
     }
 }

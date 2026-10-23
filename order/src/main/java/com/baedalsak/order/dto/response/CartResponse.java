@@ -1,8 +1,8 @@
 package com.baedalsak.order.dto.response;
 
-import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.order.domain.Cart;
 import com.baedalsak.order.domain.CartItem;
+import com.baedalsak.order.error.OrderErrorCode;
 
 import java.util.List;
 
@@ -19,11 +19,11 @@ public record CartResponse(
         int totalAmount,
         int minOrderAmount,
         boolean canOrder,
-        ErrorCode cannotOrderReason
+        OrderErrorCode cannotOrderReason
 ) {
 
     public static CartResponse empty() {
-        return new CartResponse(null, null, List.of(), 0, 0, 0, 0, false, ErrorCode.CART_EMPTY);
+        return new CartResponse(null, null, List.of(), 0, 0, 0, 0, false, OrderErrorCode.CART_EMPTY);
     }
 
     // 최소주문금액 미달이면 주문할 수 없다 (3.1.2)
@@ -42,7 +42,7 @@ public record CartResponse(
                 itemsAmount + cart.getDeliveryFee(),
                 cart.getMinOrderAmount(),
                 minOrderMet,
-                minOrderMet ? null : ErrorCode.MIN_ORDER_AMOUNT_NOT_MET
+                minOrderMet ? null : OrderErrorCode.MIN_ORDER_AMOUNT_NOT_MET
         );
     }
 }
