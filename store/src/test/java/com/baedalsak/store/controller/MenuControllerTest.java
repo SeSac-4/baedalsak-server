@@ -54,9 +54,9 @@ class MenuControllerTest extends IntegrationTest {
         }
 
         @Test
-        void 설명이_비어_있으면_null로_저장된다() throws Exception {
+        void 설명은_선택이라_보내지_않으면_null() throws Exception {
             createMenu(OWNER_ID, 1L, """
-                    {"name":"치즈김밥","description":"  ","price":5000}
+                    {"name":"치즈김밥","price":5000}
                     """)
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.description").value(nullValue()));
