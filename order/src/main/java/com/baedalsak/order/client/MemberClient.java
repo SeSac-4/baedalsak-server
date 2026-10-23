@@ -1,7 +1,7 @@
 package com.baedalsak.order.client;
 
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -35,7 +35,7 @@ public class MemberClient {
             return Optional.empty();
         } catch (RestClientException e) {
             log.warn("member 회원 조회 실패 memberId={}", memberId, e);
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+            throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
         }
     }
 }

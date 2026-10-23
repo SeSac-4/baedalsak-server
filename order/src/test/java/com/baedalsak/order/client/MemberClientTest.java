@@ -1,7 +1,7 @@
 package com.baedalsak.order.client;
 
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -67,6 +67,6 @@ class MemberClientTest {
         assertThatThrownBy(() -> memberClient.getMember(7L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);
+                .isEqualTo(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
     }
 }

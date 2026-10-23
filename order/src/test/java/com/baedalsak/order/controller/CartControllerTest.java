@@ -2,7 +2,7 @@ package com.baedalsak.order.controller;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.order.client.MenuInternal;
 import com.baedalsak.order.client.StoreClient;
 import com.baedalsak.order.client.StoreInternal;
@@ -83,7 +83,7 @@ class CartControllerTest extends IntegrationTest {
             add(1L, 1L, 2).andExpect(status().isOk());
             add(1L, 2L, 1).andExpect(status().isOk());
             // store 가 응답하지 않아도 조회는 된다
-            given(storeClient.getStore(1L)).willThrow(new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE));
+            given(storeClient.getStore(1L)).willThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE));
 
             mockMvc.perform(customer(get("/v1/cart")))
                     .andExpect(status().isOk())
@@ -192,7 +192,7 @@ class CartControllerTest extends IntegrationTest {
 
         @Test
         void store_가_응답하지_않으면_503() throws Exception {
-            given(storeClient.getStore(any())).willThrow(new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE));
+            given(storeClient.getStore(any())).willThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE));
 
             add(1L, 1L, 1)
                     .andExpect(status().isServiceUnavailable())

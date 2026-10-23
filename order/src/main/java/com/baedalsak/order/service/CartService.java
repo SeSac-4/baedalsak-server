@@ -2,7 +2,7 @@ package com.baedalsak.order.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.order.client.MenuInternal;
 import com.baedalsak.order.client.StoreClient;
 import com.baedalsak.order.client.StoreInternal;
@@ -11,6 +11,7 @@ import com.baedalsak.order.domain.CartItem;
 import com.baedalsak.order.dto.request.AddCartItemRequest;
 import com.baedalsak.order.dto.request.UpdateCartItemRequest;
 import com.baedalsak.order.dto.response.CartResponse;
+import com.baedalsak.order.error.OrderErrorCode;
 import com.baedalsak.order.repository.CartRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,9 +41,9 @@ public class CartService {
     @Transactional
     public CartResponse addItem(LoginMember member, AddCartItemRequest request, boolean replace) {
         StoreInternal store = storeClient.getStore(request.storeId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.STORE_NOT_FOUND));
         if (!store.isOpenNow()) {
-            throw new BusinessException(ErrorCode.STORE_CLOSED);
+            throw new BusinessException(OrderErrorCode.STORE_CLOSED);
         }
         MenuInternal menu = findOnSaleMenu(request.storeId(), request.menuId());
 
@@ -88,11 +89,11 @@ public class CartService {
     // 없는 메뉴·삭제된 메뉴(응답에서 빠짐)·품절 메뉴는 MENU_NOT_ON_SALE (API 명세 K27)
     private MenuInternal findOnSaleMenu(Long storeId, Long menuId) {
         List<MenuInternal> menus = storeClient.getMenus(storeId, List.of(menuId))
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.STORE_NOT_FOUND));
         return menus.stream()
                 .filter(menu -> menu.id().equals(menuId) && menu.isOnSale())
                 .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.MENU_NOT_ON_SALE));
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.MENU_NOT_ON_SALE));
     }
 
     // 같은 가게면 가게 스냅샷을 최신 값으로 갱신, 다른 가게면 replace 일 때만 비우고 새로 만든다
@@ -105,7 +106,7 @@ public class CartService {
         }
         if (found.isPresent()) {
             if (!replace) {
-                throw new BusinessException(ErrorCode.CART_DIFFERENT_STORE);
+                throw new BusinessException(OrderErrorCode.CART_DIFFERENT_STORE);
             }
             cartRepository.deleteCart(found.get());
         }
@@ -116,11 +117,11 @@ public class CartService {
     // 장바구니·항목이 없으면 404 NOT_FOUND (세부 코드가 없는 리소스, API 명세 65행)
     private Cart getExistingCart(Long customerId) {
         return cartRepository.findCart(customerId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
     }
 
     private CartItem getExistingItem(Cart cart, Long menuId) {
         return cartRepository.findItem(cart.getId(), menuId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
     }
 }
