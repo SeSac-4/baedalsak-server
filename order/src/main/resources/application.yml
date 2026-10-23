@@ -2,9 +2,6 @@
 # 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
 # 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
 
-# [내부] 동기 호출 주소 (docs 3번) — 코드에 하드코딩하지 않는다
-#   STORE_SERVICE_URL (로컬 기본 http://localhost:8081), MEMBER_SERVICE_URL (http://localhost:8085)
-
 server:
   port: ${SERVER_PORT:8082}          # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
   shutdown: graceful                  # 배포 중 처리 중인 요청을 끝내고 종료 (docs 6-4)
@@ -86,3 +83,11 @@ logging:
   structured:
     format:
       console: logstash               # JSON 로그 (docs 6-1)
+
+# [내부] 동기 호출 (설계서 '동기 호출' 탭). 주소는 환경 변수로만 받는다 (docs 3번, 하드코딩 금지)
+internal-api:
+  store-url: ${STORE_SERVICE_URL:http://localhost:8081}    # 로컬 VSCode 실행 시 store 포트
+  member-url: ${MEMBER_SERVICE_URL:http://localhost:8085}  # 로컬 VSCode 실행 시 member 포트
+  # 응답이 없으면 무한정 기다리지 않고 503 DEPENDENCY_UNAVAILABLE 로 끊는다
+  connect-timeout: 1s
+  read-timeout: 2s
