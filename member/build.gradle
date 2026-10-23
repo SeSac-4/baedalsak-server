@@ -7,8 +7,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-flyway'      // Boot 4: Flyway 자동 실행에 필요 (docs 4-1)
     implementation 'org.flywaydb:flyway-database-postgresql'                  // Flyway 10+ 는 DB별 모듈 필요
     implementation 'org.springframework.boot:spring-boot-starter-amqp'        // RabbitMQ (docs 3-1)
-    implementation 'org.springframework.security:spring-security-crypto'
-    //비밀번호 암호화 방식(해시)
     // docs 5번: 세션·토큰 Redis 는 gateway·member 만 사용
     implementation 'org.springframework.boot:spring-boot-starter-session-data-redis'
     
