@@ -1,8 +1,9 @@
 # =============================================================================
 # 백엔드 CI (baedalsak-server)
 #
-#   PR → main · main 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사
-#   수동 실행                    : 6개 서비스 전체
+#   PR → main · main/develop 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사
+#   수동 실행                            : 6개 서비스 전체
+#   develop push 가 성공하면 notify-infra 가 실행되어 AWS 배포 (실패한 커밋은 배포 안 됨)
 #   이미지 push 없음 — 배포 이미지는 baedalsak-infra 가 ECR 에 빌드 (develop 머지 시 notify-infra)
 #
 #   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json
@@ -12,15 +13,17 @@
 # =============================================================================
 name: backend-ci
 
-# 트리거에 paths-ignore를 두지 않음
+# pull_request 에는 paths-ignore를 두지 않음
 #   → 문서만 바뀐 PR에서도 워크플로가 실행되어 필수 체크 "backend-ci 결과"가 통과로 찍힘
 #     (paths-ignore가 있으면 워크플로 자체가 안 돌아 필수 체크가 영원히 대기 → 머지 불가)
 #   무시할 경로 판단은 .github/scripts/changed-services.sh 한 곳에서만 함
+#   push 의 paths-ignore 는 문서만 바뀐 develop 머지가 다시 배포되지 않게 하기 위함 (push 는 필수 체크 없음)
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, develop]
+    paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
 
 # 같은 PR에 새 커밋이 오면 이전 실행 취소 (main 은 취소하지 않음)

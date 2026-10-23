@@ -17,6 +17,7 @@ baedalsak-server 저장소의 백엔드 CI 설명입니다. 전체 인프라 결
 |---|---|---|
 | PR → `main` | 변경된 서비스 | 테스트 → 이미지 빌드(amd64) → Trivy 검사 |
 | `main` 머지 | 변경된 서비스 | 위와 같음 |
+| `develop` 머지 | 변경된 서비스 | 위와 같음 → **성공하면** `notify-infra` 가 AWS 배포 요청 (실패한 커밋은 배포 안 됨). 문서만 바뀐 push 는 CI·배포 둘 다 안 돎 |
 | 수동 실행 (Actions 화면) | 6개 전체 | 위와 같음 |
 
 - **이미지 push 없음** (GHCR 사용 안 함, 2026-10-23). 배포 이미지는 develop 머지 시 `notify-infra` → baedalsak-infra 가 빌드해 **ECR** 에 올립니다.
