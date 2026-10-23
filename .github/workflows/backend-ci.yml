@@ -1,10 +1,9 @@
 # =============================================================================
 # 백엔드 CI (baedalsak-server)
 #
-#   PR → main      : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사   (push 없음)
-#   main 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64·arm64) → Trivy 검사
-#                    → GHCR push  ghcr.io/<owner>/baedalsak/<서비스>:sha-<7자리>, :main
-#   수동 실행        : 6개 서비스 전체 (main 에서 실행할 때만 push)
+#   PR → main · main 머지(push) : 변경된 서비스만  테스트 → 이미지 빌드(amd64) → Trivy 검사
+#   수동 실행                    : 6개 서비스 전체
+#   이미지 push 없음 — 배포 이미지는 baedalsak-infra 가 ECR 에 빌드 (develop 머지 시 notify-infra)
 #
 #   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json
 #   서비스별 실제 작업: .github/workflows/_backend-service.yml (재사용 워크플로)
@@ -60,13 +59,11 @@ jobs:
       matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     permissions:
       contents: read
-      packages: write          # GHCR push
       security-events: write   # Trivy 결과 → Security 탭
     uses: ./.github/workflows/_backend-service.yml
     with:
       service: ${{ matrix.name }}
       module: ${{ matrix.module }}
-      push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
 
   # 브랜치 보호 규칙용 단일 체크 (변경 서비스가 없어 service 가 건너뛰어져도 통과)
   result:
