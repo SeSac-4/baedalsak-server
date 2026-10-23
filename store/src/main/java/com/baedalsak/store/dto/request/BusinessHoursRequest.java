@@ -53,14 +53,14 @@ public record BusinessHoursRequest(
             Boolean isClosed
     ) {
 
-        // 휴무가 아니면 오픈·마감 시각 필수, 오픈 < 마감
+        // 휴무가 아니면 오픈·마감 시각 필수 (API 명세 1.4.2)
         @JsonIgnore
-        @AssertTrue(message = "영업일은 오픈 시각과 마감 시각을 입력하고, 마감은 오픈보다 늦어야 합니다.")
+        @AssertTrue(message = "영업일은 오픈 시각과 마감 시각을 입력해 주세요.")
         public boolean isTimeValid() {
             if (isClosed == null || isClosed) {
                 return true;
             }
-            return openTime != null && closeTime != null && openTime.isBefore(closeTime);
+            return openTime != null && closeTime != null;
         }
     }
 }
