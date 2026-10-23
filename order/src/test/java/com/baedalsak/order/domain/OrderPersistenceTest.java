@@ -66,9 +66,11 @@ class OrderPersistenceTest extends IntegrationTest {
 
     @Test
     void 장바구니는_고객당_하나() {
-        jdbcTemplate.update("INSERT INTO orders.cart (customer_id, store_id) VALUES (7, 1)");
+        String sql = "INSERT INTO orders.cart (customer_id, store_id, store_name, delivery_fee, min_order_amount) "
+                + "VALUES (7, ?, '싹분식', 3000, 12000)";
+        jdbcTemplate.update(sql, 1L);
 
-        assertThatThrownBy(() -> jdbcTemplate.update("INSERT INTO orders.cart (customer_id, store_id) VALUES (7, 2)"))
+        assertThatThrownBy(() -> jdbcTemplate.update(sql, 2L))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("cart_customer_uq");
     }
