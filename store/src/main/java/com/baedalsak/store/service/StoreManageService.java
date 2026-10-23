@@ -2,13 +2,13 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.request.BusinessHoursRequest;
 import com.baedalsak.store.dto.request.OperationStatusRequest;
 import com.baedalsak.store.dto.request.StoreUpsertRequest;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
+import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.BusinessHourRepository;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +42,7 @@ public class StoreManageService {
     public StoreDetailResponse create(LoginMember member, StoreUpsertRequest request) {
         storeOwnership.requireOwner(member);
         if (storeRepository.existsByOwnerId(member.id())) {
-            throw new BusinessException(ErrorCode.STORE_ALREADY_EXISTS);
+            throw new BusinessException(StoreErrorCode.STORE_ALREADY_EXISTS);
         }
         Store store;
         try {
@@ -50,7 +50,7 @@ public class StoreManageService {
                     request.address(), request.minOrderAmount(), request.deliveryFee()));
         } catch (DataIntegrityViolationException e) {
             // 같은 사장님이 동시에 두 번 등록해 existsByOwnerId 를 둘 다 통과한 경우 → owner_id UNIQUE 위반
-            throw new BusinessException(ErrorCode.STORE_ALREADY_EXISTS);
+            throw new BusinessException(StoreErrorCode.STORE_ALREADY_EXISTS);
         }
         List<BusinessHour> hours = Arrays.stream(DayOfWeek.values())
                 .map(day -> BusinessHour.defaultOf(store.getId(), day))

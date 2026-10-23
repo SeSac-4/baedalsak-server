@@ -2,13 +2,13 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
-import com.baedalsak.common.error.ErrorCode;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.response.CategoryResponse;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
 import com.baedalsak.store.dto.response.StoreSummaryResponse;
+import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.BusinessHourRepository;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -65,14 +65,14 @@ public class StoreQueryService {
 
     public StoreDetailResponse getStore(Long storeId) {
         Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
         return toDetail(store);
     }
 
     // 아직 가게를 등록하지 않았으면 404 STORE_NOT_FOUND → 프론트가 가게 등록 화면(O-00)으로 안내
     public StoreDetailResponse getMyStore(LoginMember member) {
         Store store = storeRepository.findByOwnerId(member.id())
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
         return toDetail(store);
     }
 
