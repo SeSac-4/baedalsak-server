@@ -63,4 +63,9 @@ public class PaymentOutbox {
     outbox.createdAt = OffsetDateTime.now();
     return outbox;
   }
+
+  // 발행 확인(ack)을 받았을 때만 호출 (docs 3-2)
+  public void markPublished() {
+    this.publishedAt = OffsetDateTime.now();
+  }
 }
