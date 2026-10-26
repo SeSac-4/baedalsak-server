@@ -6,6 +6,7 @@ import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.order.domain.Order;
 import com.baedalsak.order.domain.OrderItem;
+import com.baedalsak.order.domain.OrderStatus;
 import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.dto.response.OrderInternalResponse;
 import com.baedalsak.order.dto.response.OrderSummaryResponse;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -38,11 +40,31 @@ public class OrderQueryService {
     public PageResponse<OrderSummaryResponse> getMyOrders(LoginMember member, int page, int size) {
         Page<Order> orders = orderRepository.findAllByCustomerIdOrderByCreatedAtDescIdDesc(
                 member.id(), PageRequest.of(page, size));
-        Map<Long, List<OrderItem>> items = orders.isEmpty() ? Map.of()
-                : orderItemRepository.findAllByOrderIdInOrderById(orders.map(Order::getId).toList()).stream()
-                .collect(Collectors.groupingBy(OrderItem::getOrderId));
+        Map<Long, List<OrderItem>> items = itemsOf(orders);
         List<OrderSummaryResponse> content = orders.stream()
                 .map(order -> OrderSummaryResponse.of(order, items.getOrDefault(order.getId(), List.of())))
+                .toList();
+        return PageResponse.of(orders, content);
+    }
+
+    // 사장님 가게 주문 목록 (4.3.1). 결제대기(PENDING_PAYMENT)는 노출하지 않는다. 상태를 안 주면 나머지 전부
+    public PageResponse<OrderDetailResponse> getStoreOrders(LoginMember member, Long storeId,
+                                                            List<OrderStatus> statuses, int page, int size) {
+        if (member.role() != MemberRole.OWNER || orderRepository.existsByStoreIdAndOwnerIdNot(storeId, member.id())) {
+            throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        }
+        EnumSet<OrderStatus> visible = statuses == null || statuses.isEmpty()
+                ? EnumSet.complementOf(EnumSet.of(OrderStatus.PENDING_PAYMENT))
+                : EnumSet.copyOf(statuses);
+        visible.remove(OrderStatus.PENDING_PAYMENT);
+        if (visible.isEmpty()) {
+            return PageResponse.of(Page.empty(PageRequest.of(page, size)), List.of());
+        }
+        Page<Order> orders = orderRepository.findAllByStoreIdAndOwnerIdAndStatusInOrderByCreatedAtDescIdDesc(
+                storeId, member.id(), visible, PageRequest.of(page, size));
+        Map<Long, List<OrderItem>> items = itemsOf(orders);
+        List<OrderDetailResponse> content = orders.stream()
+                .map(order -> OrderDetailResponse.of(order, items.getOrDefault(order.getId(), List.of())))
                 .toList();
         return PageResponse.of(orders, content);
     }
@@ -64,6 +86,15 @@ public class OrderQueryService {
     // [내부] payment 가 결제 요청 생성 때 호출
     public OrderInternalResponse getInternal(Long orderId) {
         return OrderInternalResponse.from(getExistingOrder(orderId));
+    }
+
+    // 한 페이지의 주문 항목을 한 번에 조회
+    private Map<Long, List<OrderItem>> itemsOf(Page<Order> orders) {
+        if (orders.isEmpty()) {
+            return Map.of();
+        }
+        return orderItemRepository.findAllByOrderIdInOrderById(orders.map(Order::getId).toList()).stream()
+                .collect(Collectors.groupingBy(OrderItem::getOrderId));
     }
 
     private Order getExistingOrder(Long orderId) {
