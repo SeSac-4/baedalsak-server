@@ -93,3 +93,9 @@ internal-api:
   # 응답이 없으면 무한정 기다리지 않고 503 DEPENDENCY_UNAVAILABLE 로 끊는다
   connect-timeout: 1s
   read-timeout: 2s
+
+# 토스페이먼츠 결제 승인 (설계서 '동기 호출' 탭, N1.4: 5초 타임아웃, 재시도 없음)
+toss:
+  base-url: https://api.tosspayments.com
+  secret-key: ${TOSS_SECRET_KEY}      # 비밀값: 기본값 없이 환경 변수로만 받는다 (docs 3번)
+  timeout: 5s
