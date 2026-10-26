@@ -19,7 +19,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
-    public static final String EVENTS_EXCHANGE = "baedalssak.events";
+    public static final String EVENTS_EXCHANGE = "baedalsak.events";
     public static final String DEAD_LETTER_EXCHANGE = "delivery.dlx";
 
     public static final String ORDER_ACCEPTED_QUEUE = "delivery.order-accepted";
