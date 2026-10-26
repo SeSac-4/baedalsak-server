@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 이벤트 발행 Outbox (outbox 테이블). 상태 변경과 같은 트랜잭션에 저장하고, 발행기가 1초마다 RabbitMQ 로 보낸다 (docs 3-2·3-3).
+ * 이벤트 발행 Outbox (outbox 테이블). 상태 변경과 같은 트랜잭션에 저장하고, OutboxPublisher 가 1초마다 RabbitMQ 로 보낸다 (docs 3-2·3-3).
  * event_id 는 RabbitMQ messageId 로 전달되어 받는 쪽 멱등 키가 된다.
  */
 @Entity
@@ -71,6 +71,11 @@ public class OutboxEvent {
     public static OutboxEvent create(String eventType, String routingKey, Long aggregateId, String payload,
                                      String traceId) {
         return new OutboxEvent(eventType, routingKey, aggregateId, payload, traceId);
+    }
+
+    // 발행 확인(ack)을 받았을 때만 호출 (docs 3-2)
+    public void markPublished() {
+        this.publishedAt = OffsetDateTime.now();
     }
 
     @PrePersist

@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 상태 변경과 같은 트랜잭션에 outbox 행을 쓴다 (docs 3-2). 실제 RabbitMQ 발행은 발행기(#31)가 한다.
+ * 상태 변경과 같은 트랜잭션에 outbox 행을 쓴다 (docs 3-2). 실제 RabbitMQ 발행은 OutboxPublisher 가 한다.
  * payload 는 Boot 가 설정한 JsonMapper 로 직렬화한다 (시각은 KST +09:00).
  */
 @Component
