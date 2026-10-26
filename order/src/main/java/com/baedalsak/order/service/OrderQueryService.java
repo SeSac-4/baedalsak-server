@@ -85,7 +85,8 @@ public class OrderQueryService {
 
     // [내부] payment 가 결제 요청 생성 때 호출
     public OrderInternalResponse getInternal(Long orderId) {
-        return OrderInternalResponse.from(getExistingOrder(orderId));
+        return OrderInternalResponse.of(getExistingOrder(orderId),
+                orderItemRepository.findAllByOrderIdOrderById(orderId));
     }
 
     // 한 페이지의 주문 항목을 한 번에 조회
