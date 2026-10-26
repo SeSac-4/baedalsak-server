@@ -7,6 +7,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -15,6 +16,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+// 발행기는 RabbitMQ 가 필요해서 기본은 끈다. 발행 테스트(OutboxPublisherTest)만 켠다
+@TestPropertySource(properties = "outbox.publisher.enabled=false")
 public abstract class IntegrationTest {
 
     // 테스트 클래스 전체가 컨테이너 1개를 공유한다
