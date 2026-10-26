@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 주문 생성·조회 API (#29). store·member 내부 API 는 응답을 고정하고, DB 는 실제 PostgreSQL.
+ * 주문 생성·조회 API (#29), 가게 주문 목록·주문 수락 (#30). store·member 내부 API 는 응답을 고정하고, DB 는 실제 PostgreSQL.
  * 가게 1(싹분식, 사장님 10, 배달비 3000, 최소 12000) 메뉴: 1 참치김밥 4500 / 2 라볶이 6000
  * 고객 7(010-1234-5678, customer@…), 사장님 10(owner@…)
  */
@@ -42,7 +42,7 @@ class OrderControllerTest extends IntegrationTest {
     static final long OWNER_ID = 10L;
 
     static final String ORDER_BODY = """
-            {"deliveryAddress":"서울시 마포구 2","storeRequest":"단무지 빼 주세요","riderRequest":"문 앞에 두세요"}
+            {"deliveryAddress":"서울시 마포구 2","deliveryDong":"연남동","storeRequest":"단무지 빼 주세요","riderRequest":"문 앞에 두세요"}
             """;
 
     @MockitoBean
@@ -109,11 +109,15 @@ class OrderControllerTest extends IntegrationTest {
             createOrder().andExpect(status().isCreated());
 
             var row = jdbcTemplate.queryForMap(
-                    "SELECT owner_id, customer_phone, customer_email, owner_email FROM orders.orders WHERE id = 1");
+                    "SELECT owner_id, customer_phone, customer_email, owner_email, delivery_dong, pickup_address "
+                            + "FROM orders.orders WHERE id = 1");
             assertThat(row.get("owner_id")).isEqualTo(OWNER_ID);
             assertThat(row.get("customer_phone")).isEqualTo("010-1234-5678");
             assertThat(row.get("customer_email")).isEqualTo("customer@baedalsak.click");
             assertThat(row.get("owner_email")).isEqualTo("owner@baedalsak.click");
+            // 배달 생성(order.accepted)에 쓸 동·픽업 주소. 픽업 주소는 주문 시점 가게 주소
+            assertThat(row.get("delivery_dong")).isEqualTo("연남동");
+            assertThat(row.get("pickup_address")).isEqualTo("서울시 마포구 1");
         }
 
         @Test
@@ -190,10 +194,209 @@ class OrderControllerTest extends IntegrationTest {
         void 배달_주소가_없으면_400() throws Exception {
             addToCart(1L, 3);
 
-            mockMvc.perform(customer(post("/v1/orders")).content("{\"deliveryAddress\":\" \"}"))
+            mockMvc.perform(customer(post("/v1/orders")).content("{\"deliveryAddress\":\" \",\"deliveryDong\":\"연남동\"}"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.errors[0].field").value("deliveryAddress"));
+        }
+
+        @Test
+        void 배달_동이_없으면_400() throws Exception {
+            addToCart(1L, 3);
+
+            mockMvc.perform(customer(post("/v1/orders")).content("{\"deliveryAddress\":\"서울시 마포구 2\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value("deliveryDong"));
+        }
+    }
+
+    @Nested
+    class 가게_주문_목록 {
+
+        @Test
+        void 결제대기를_뺀_내_가게_주문을_최신순으로_조회한다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+            setStatus(2, "COOKING");
+
+            owner(get("/v1/stores/1/orders"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(2))
+                    .andExpect(jsonPath("$.content[0].status").value("COOKING"))
+                    .andExpect(jsonPath("$.content[0].items[0].menuName").value("참치김밥"))
+                    .andExpect(jsonPath("$.content[0].storeRequest").value("단무지 빼 주세요"))
+                    .andExpect(jsonPath("$.content[1].id").value(1))
+                    .andExpect(jsonPath("$.totalElements").value(2));
+        }
+
+        @Test
+        void 상태를_여러_개_골라_조회한다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+            setStatus(2, "COOKING");
+            setStatus(3, "DELIVERING");
+
+            // 진행 중 탭: 조리중 + 배달중
+            owner(get("/v1/stores/1/orders").param("status", "COOKING", "DELIVERING"))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(3))
+                    .andExpect(jsonPath("$.content[1].id").value(2));
+        }
+
+        @Test
+        void 결제대기를_골라도_보이지_않는다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+
+            owner(get("/v1/stores/1/orders").param("status", "PENDING_PAYMENT"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(0))
+                    .andExpect(jsonPath("$.totalElements").value(0));
+        }
+
+        @Test
+        void 주문이_없으면_빈_페이지() throws Exception {
+            owner(get("/v1/stores/1/orders"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(0))
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(20));
+        }
+
+        @Test
+        void 다른_사장님의_가게이거나_사장님이_아니면_403() throws Exception {
+            placeOrder(CUSTOMER_ID);
+
+            mockMvc.perform(member(get("/v1/stores/1/orders"), 20L, "OWNER"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            mockMvc.perform(customer(get("/v1/stores/1/orders")))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void 없는_상태값이면_400() throws Exception {
+            owner(get("/v1/stores/1/orders").param("status", "DONE"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    class 주문_수락 {
+
+        @Test
+        void 결제완료_주문을_조리중으로_바꾸고_조리_완료_예상_시각을_정한다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            accept(1, "{\"estimatedMinutes\":20}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.status").value("COOKING"))
+                    .andExpect(jsonPath("$.estimatedReadyAt").exists())
+                    .andExpect(jsonPath("$.items.length()").value(1));
+
+            var row = jdbcTemplate.queryForMap("SELECT status, "
+                    + "EXTRACT(EPOCH FROM estimated_ready_at - now())::int AS seconds FROM orders.orders WHERE id = 1");
+            assertThat(row.get("status")).isEqualTo("COOKING");
+            assertThat((Integer) row.get("seconds")).isBetween(19 * 60, 20 * 60);
+        }
+
+        @Test
+        void 같은_트랜잭션에_OrderAccepted_outbox_를_남긴다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            accept(1, "{\"estimatedMinutes\":15}").andExpect(status().isOk());
+
+            var row = jdbcTemplate.queryForMap("SELECT event_id, event_type, routing_key, aggregate_id, "
+                    + "payload::text AS payload, published_at FROM orders.outbox");
+            assertThat(row.get("event_id")).isNotNull();
+            assertThat(row.get("event_type")).isEqualTo("OrderAccepted");
+            assertThat(row.get("routing_key")).isEqualTo("order.accepted");
+            assertThat(row.get("aggregate_id")).isEqualTo(1L);
+            assertThat(row.get("published_at")).isNull();
+
+            var payload = jdbcTemplate.queryForMap("""
+                    SELECT payload->>'orderId' AS order_id, payload->>'customerId' AS customer_id,
+                           payload->>'customerPhone' AS customer_phone, payload->>'ownerId' AS owner_id,
+                           payload->>'storeId' AS store_id, payload->>'storeName' AS store_name,
+                           payload->>'pickupAddress' AS pickup_address, payload->>'deliveryAddress' AS delivery_address,
+                           payload->>'deliveryDong' AS delivery_dong, payload->>'deliveryFee' AS delivery_fee,
+                           payload->>'riderRequest' AS rider_request, payload->>'estimatedReadyAt' AS estimated_ready_at,
+                           payload->>'customerEmail' AS customer_email, payload->>'ownerEmail' AS owner_email
+                      FROM orders.outbox
+                    """);
+            assertThat(payload.get("order_id")).isEqualTo("1");
+            assertThat(payload.get("customer_id")).isEqualTo("7");
+            assertThat(payload.get("customer_phone")).isEqualTo("010-1234-5678");
+            assertThat(payload.get("owner_id")).isEqualTo("10");
+            assertThat(payload.get("store_id")).isEqualTo("1");
+            assertThat(payload.get("store_name")).isEqualTo("싹분식");
+            assertThat(payload.get("pickup_address")).isEqualTo("서울시 마포구 1");
+            assertThat(payload.get("delivery_address")).isEqualTo("서울시 마포구 2");
+            assertThat(payload.get("delivery_dong")).isEqualTo("연남동");
+            assertThat(payload.get("delivery_fee")).isEqualTo("3000");
+            assertThat(payload.get("rider_request")).isEqualTo("문 앞에 두세요");
+            assertThat((String) payload.get("estimated_ready_at")).endsWith("+09:00");
+            assertThat(payload.get("customer_email")).isEqualTo("customer@baedalsak.click");
+            assertThat(payload.get("owner_email")).isEqualTo("owner@baedalsak.click");
+        }
+
+        @Test
+        void 이미_수락했거나_결제_전이면_409_ORDER_INVALID_STATUS() throws Exception {
+            placeOrder(CUSTOMER_ID);
+
+            accept(1, "{\"estimatedMinutes\":20}")
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+
+            setStatus(1, "PAID");
+            accept(1, "{\"estimatedMinutes\":20}").andExpect(status().isOk());
+            accept(1, "{\"estimatedMinutes\":20}")
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders.outbox", Integer.class)).isOne();
+        }
+
+        @Test
+        void 다른_사장님_주문이거나_사장님이_아니면_403() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            mockMvc.perform(member(post("/v1/orders/1/accept"), 20L, "OWNER").content("{\"estimatedMinutes\":20}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            mockMvc.perform(customer(post("/v1/orders/1/accept")).content("{\"estimatedMinutes\":20}"))
+                    .andExpect(status().isForbidden());
+            assertThat(jdbcTemplate.queryForObject("SELECT status FROM orders.orders WHERE id = 1", String.class))
+                    .isEqualTo("PAID");
+        }
+
+        @Test
+        void 없는_주문이면_404_ORDER_NOT_FOUND() throws Exception {
+            accept(999, "{\"estimatedMinutes\":20}")
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+        }
+
+        @Test
+        void 조리_예상_시간이_없거나_0_이하면_400() throws Exception {
+            accept(1, "{}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value("estimatedMinutes"));
+            accept(1, "{\"estimatedMinutes\":0}")
+                    .andExpect(status().isBadRequest());
+        }
+
+        private ResultActions accept(long orderId, String body) throws Exception {
+            return mockMvc.perform(member(post("/v1/orders/" + orderId + "/accept"), OWNER_ID, "OWNER").content(body));
         }
     }
 
@@ -310,6 +513,15 @@ class OrderControllerTest extends IntegrationTest {
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
         }
+    }
+
+    // 결제 완료 등은 payment 이벤트(#32)로 바뀌므로 테스트에서는 DB 를 직접 바꾼다
+    private void setStatus(long orderId, String status) {
+        jdbcTemplate.update("UPDATE orders.orders SET status = ? WHERE id = ?", status, orderId);
+    }
+
+    private ResultActions owner(MockHttpServletRequestBuilder request) throws Exception {
+        return mockMvc.perform(member(request, OWNER_ID, "OWNER"));
     }
 
     private void openStore(int deliveryFee, int minOrderAmount) {
