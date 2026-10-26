@@ -52,4 +52,19 @@ public class CartItem {
     public static CartItem create(Long cartId, Long menuId, String menuName, Integer price, Integer quantity) {
         return new CartItem(cartId, menuId, menuName, price, quantity);
     }
+
+    // 같은 메뉴를 다시 담으면 수량을 더하고, 메뉴명·가격은 최신 값으로 갱신한다 (3.1.1)
+    public void addQuantity(int quantity, String menuName, Integer price) {
+        this.quantity += quantity;
+        this.menuName = menuName;
+        this.price = price;
+    }
+
+    public void changeQuantity(int quantity) {
+        this.quantity = quantity;
+    }
+
+    public int amount() {
+        return price * quantity;
+    }
 }

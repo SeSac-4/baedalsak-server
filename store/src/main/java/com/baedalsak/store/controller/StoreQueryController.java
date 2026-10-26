@@ -1,7 +1,7 @@
 package com.baedalsak.store.controller;
 
-import com.baedalsak.store.common.auth.CurrentMember;
-import com.baedalsak.store.common.auth.LoginMember;
+import com.baedalsak.common.auth.CurrentMember;
+import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
 import com.baedalsak.store.dto.response.StoreSummaryResponse;

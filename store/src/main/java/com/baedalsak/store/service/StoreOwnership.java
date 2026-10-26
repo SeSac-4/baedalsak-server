@@ -1,10 +1,11 @@
 package com.baedalsak.store.service;
 
-import com.baedalsak.store.common.auth.LoginMember;
-import com.baedalsak.store.common.auth.MemberRole;
-import com.baedalsak.store.common.error.BusinessException;
-import com.baedalsak.store.common.error.ErrorCode;
+import com.baedalsak.common.auth.LoginMember;
+import com.baedalsak.common.auth.MemberRole;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.store.domain.Store;
+import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,7 @@ public class StoreOwnership {
     // 역할은 gateway 가 검증하지만, 가게·메뉴 관리는 사장님만 가능하도록 한 번 더 막는다
     public void requireOwner(LoginMember member) {
         if (member.role() != MemberRole.OWNER) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new BusinessException(CommonErrorCode.FORBIDDEN);
         }
     }
 
@@ -29,9 +30,9 @@ public class StoreOwnership {
     public Store getOwnedStore(LoginMember member, Long storeId) {
         requireOwner(member);
         Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
         if (!store.isOwnedBy(member.id())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new BusinessException(CommonErrorCode.FORBIDDEN);
         }
         return store;
     }
