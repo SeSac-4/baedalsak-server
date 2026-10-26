@@ -1,4 +1,4 @@
-package com.baedalsak.payment.client;
+package com.baedalsak.payment.client.order;
 
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;

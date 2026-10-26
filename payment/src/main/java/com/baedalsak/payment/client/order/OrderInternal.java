@@ -1,4 +1,4 @@
-package com.baedalsak.payment.client;
+package com.baedalsak.payment.client.order;
 
 /**
  * order [내부] 주문 조회 응답 (GET /internal/orders/{orderId}).
