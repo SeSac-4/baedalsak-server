@@ -18,7 +18,8 @@ public enum OrderErrorCode implements ErrorCode {
     CART_DIFFERENT_STORE(409, "장바구니에 다른 가게의 메뉴가 있습니다."),
     CART_EMPTY(400, "장바구니가 비어 있습니다."),
     MIN_ORDER_AMOUNT_NOT_MET(400, "최소 주문 금액을 충족하지 못했습니다."),
-    ORDER_NOT_FOUND(404, "주문을 찾을 수 없습니다.");
+    ORDER_NOT_FOUND(404, "주문을 찾을 수 없습니다."),
+    ORDER_INVALID_STATUS(409, "현재 주문 상태에서는 처리할 수 없습니다.");
 
     private final int status;
     private final String message;

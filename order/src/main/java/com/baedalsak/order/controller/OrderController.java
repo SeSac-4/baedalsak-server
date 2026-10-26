@@ -2,10 +2,12 @@ package com.baedalsak.order.controller;
 
 import com.baedalsak.common.auth.CurrentMember;
 import com.baedalsak.common.auth.LoginMember;
+import com.baedalsak.order.dto.request.AcceptOrderRequest;
 import com.baedalsak.order.dto.request.CreateOrderRequest;
 import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.dto.response.OrderSummaryResponse;
 import com.baedalsak.order.dto.response.PageResponse;
+import com.baedalsak.order.service.OrderAcceptService;
 import com.baedalsak.order.service.OrderQueryService;
 import com.baedalsak.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -32,6 +34,7 @@ public class OrderController {
 
     private final OrderService orderService;
     private final OrderQueryService orderQueryService;
+    private final OrderAcceptService orderAcceptService;
 
     // 4.1.1 주문 생성 (장바구니 기준, 결제대기로 생성)
     @PostMapping
@@ -47,6 +50,13 @@ public class OrderController {
                                                           @RequestParam(defaultValue = "0") @Min(0) int page,
                                                           @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return orderQueryService.getMyOrders(member, page, size);
+    }
+
+    // 4.3.2 주문 수락 (사장님). 결제완료 → 조리중, 이미 처리된 주문이면 409 ORDER_INVALID_STATUS
+    @PostMapping("/{orderId}/accept")
+    public OrderDetailResponse accept(@CurrentMember LoginMember member, @PathVariable Long orderId,
+                                      @Valid @RequestBody AcceptOrderRequest request) {
+        return orderAcceptService.accept(member, orderId, request);
     }
 
     // 4.2.1 주문 상세 (고객·사장님 본인만)
