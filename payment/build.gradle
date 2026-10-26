@@ -1,6 +1,7 @@
 // 루트 build.gradle이 Java 21 / Spring Boot BOM / actuator / tracing-brave /
 // lombok 을 이미 넣어 준다 (docs 2번). 여기에는 이 서비스에만 필요한 것만 적는다.
 dependencies {
+    implementation project(':common')                                         // 공통 에러 응답·예외 처리·로그인 사용자 헤더
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'      // Boot 4 이름 (구 starter-web)
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
