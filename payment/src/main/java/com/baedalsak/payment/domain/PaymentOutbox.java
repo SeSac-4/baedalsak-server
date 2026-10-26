@@ -1,4 +1,4 @@
-package com.baedalsak.payment.event;
+package com.baedalsak.payment.domain;
 
 import java.time.OffsetDateTime;
 import java.util.Objects;
