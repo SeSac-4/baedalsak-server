@@ -92,6 +92,8 @@ public class OrderService {
                 .ownerId(store.ownerId())
                 .storeName(store.name())
                 .deliveryAddress(request.deliveryAddress())
+                .deliveryDong(request.deliveryDong())
+                .pickupAddress(store.address())
                 .customerPhone(customer.phone())
                 .customerEmail(customer.email())
                 .ownerEmail(owner.email())

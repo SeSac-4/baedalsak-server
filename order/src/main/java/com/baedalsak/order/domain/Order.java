@@ -52,6 +52,14 @@ public class Order {
     @Column(nullable = false, updatable = false)
     private String deliveryAddress;
 
+    // 배달지 동. 배차 대기 목록에는 동 단위만 보여 준다 (6.2.1, OrderAccepted deliveryDong)
+    @Column(nullable = false, length = 50, updatable = false)
+    private String deliveryDong;
+
+    // 가게 주소 스냅샷 = 라이더 픽업지 (OrderAccepted pickupAddress)
+    @Column(nullable = false, updatable = false)
+    private String pickupAddress;
+
     // OrderAccepted 페이로드로 delivery 에 전달. 로그에는 마스킹 (N4.4)
     @Column(nullable = false, length = 20, updatable = false)
     private String customerPhone;
@@ -96,6 +104,7 @@ public class Order {
     // 총액은 받지 않고 항목 금액 + 배달비로 계산한다
     @Builder
     private Order(Long customerId, Long storeId, Long ownerId, String storeName, String deliveryAddress,
+                  String deliveryDong, String pickupAddress,
                   String customerPhone, String customerEmail, String ownerEmail,
                   String storeRequest, String riderRequest, Integer itemsAmount, Integer deliveryFee) {
         this.customerId = customerId;
@@ -104,6 +113,8 @@ public class Order {
         this.storeName = storeName;
         this.status = OrderStatus.PENDING_PAYMENT;
         this.deliveryAddress = deliveryAddress;
+        this.deliveryDong = deliveryDong;
+        this.pickupAddress = pickupAddress;
         this.customerPhone = customerPhone;
         this.customerEmail = customerEmail;
         this.ownerEmail = ownerEmail;
