@@ -44,6 +44,8 @@ x-app-env: &app-env
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?.env 파일을 만들어 주세요}
   RABBITMQ_VHOST: /                         # 운영 Amazon MQ: /prod · /dev
   RABBITMQ_SSL_ENABLED: "false"             # 운영 Amazon MQ: true (AMQPS 5671)
+  # 개발용 seed 계정 (db/seed/R__<서비스>_seed.sql, #73). 운영에는 두지 않음
+  SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
   # DynamoDB 주석 처리
   # DYNAMODB_ENDPOINT: http://dynamodb:8000
   # AWS_ACCESS_KEY_ID: local                # DynamoDB Local은 아무 값이나 받음
