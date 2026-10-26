@@ -7,8 +7,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.baedalsak.common.auth.CurrentMember;
 import com.baedalsak.common.auth.LoginMember;
+import com.baedalsak.payment.dto.request.ConfirmPaymentRequest;
 import com.baedalsak.payment.dto.request.CreatePaymentRequest;
+import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.dto.response.PaymentReadyResponse;
+import com.baedalsak.payment.service.PaymentConfirmService;
 import com.baedalsak.payment.service.PaymentService;
 
 import jakarta.validation.Valid;
@@ -23,11 +26,19 @@ import lombok.RequiredArgsConstructor;
 public class PaymentController {
 
   private final PaymentService paymentService;
+  private final PaymentConfirmService paymentConfirmService;
 
   // 결제 요청 생성 (U-05 진입). 같은 주문이면 기존 결제 요청을 돌려준다
   @PostMapping
   public PaymentReadyResponse request(@CurrentMember LoginMember member,
       @Valid @RequestBody CreatePaymentRequest request) {
     return paymentService.request(member, request.orderId());
+  }
+
+  // 결제 승인 (U-06, 토스 successUrl 복귀 후). 재호출은 409 PAYMENT_ALREADY_APPROVED
+  @PostMapping("/confirm")
+  public PaymentDetailResponse confirm(@CurrentMember LoginMember member,
+      @Valid @RequestBody ConfirmPaymentRequest request) {
+    return paymentConfirmService.confirm(member, request);
   }
 }
