@@ -504,7 +504,35 @@ class OrderControllerTest extends IntegrationTest {
                     .andExpect(jsonPath("$.storeId").value(1))
                     .andExpect(jsonPath("$.storeName").value("싹분식"))
                     .andExpect(jsonPath("$.customerEmail").value("customer@baedalsak.click"))
-                    .andExpect(jsonPath("$.ownerEmail").value("owner@baedalsak.click"));
+                    .andExpect(jsonPath("$.ownerEmail").value("owner@baedalsak.click"))
+                    // 항목이 하나면 메뉴명 그대로
+                    .andExpect(jsonPath("$.orderName").value("참치김밥"));
+        }
+
+        @Test
+        void 주문명은_첫_메뉴명_외_나머지_항목_수() throws Exception {
+            addToCart(1L, 2);
+            addToCart(2L, 1);
+            createOrder().andExpect(status().isCreated());
+
+            // 수량(참치김밥 2개)이 아니라 항목 수로 센다
+            mockMvc.perform(get("/internal/orders/1"))
+                    .andExpect(jsonPath("$.orderName").value("참치김밥 외 1건"));
+        }
+
+        @Test
+        void 주문명이_100자를_넘으면_첫_메뉴명을_줄인다() throws Exception {
+            String longName = "가".repeat(100);
+            storeMenus = List.of(
+                    new MenuInternal(1L, longName, 4500, MenuInternal.SaleStatus.ON_SALE),
+                    new MenuInternal(2L, "라볶이", 6000, MenuInternal.SaleStatus.ON_SALE));
+            addToCart(1L, 2);
+            addToCart(2L, 1);
+            createOrder().andExpect(status().isCreated());
+
+            // " 외 1건" 5자 + 메뉴명 95자 = 100자 (토스 orderName 최대 길이)
+            mockMvc.perform(get("/internal/orders/1"))
+                    .andExpect(jsonPath("$.orderName").value("가".repeat(95) + " 외 1건"));
         }
 
         @Test
