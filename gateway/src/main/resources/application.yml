@@ -1,4 +1,4 @@
-# gateway 서비스 (Ingress 뒤 API 진입점)
+# gateway 서비스 (CloudFront → internal ALB 뒤 API 진입점, 설계서 v3)
 # 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
 # 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
 #
@@ -33,49 +33,52 @@ spring:
       server:
         webflux:
           # docs 7번 gateway 라우팅
-          #   Ingress 가 /api 를 떼고 넘긴다 (/api/v1/stores → /v1/stores)
+          #   설계서 v3: /api 는 gateway 가 뗀다 (ALB·CloudFront 는 경로를 바꾸지 않고 전달)
+          #   /api/v1/stores 로 받아 → 아래 StripPrefix=1 로 /v1/stores 로 넘긴다
           #   /v*/ 는 버전 숫자와 무관하게 매칭 → v2 가 생겨도 gateway 는 그대로
           #   order 값이 작은 라우트부터 먼저 맞는 것 하나로 간다
           #   /internal/** 는 라우트 없음 → 404 (서비스 간 직접 호출 전용)
           # uri 는 docs 3번 표의 *_SERVICE_URL 로만 받는다 (compose: http://store:8080 등)
           # 기본값은 로컬 VSCode 실행용 포트 (docs 1번 표)
+          default-filters:
+            - StripPrefix=1           # 모든 라우트 공통: 앞의 /api 한 단계를 떼고 하위 서비스로 전달
           routes:
             # 사장님 가게 주문 목록 — store 보다 먼저 매칭되어야 함
             - id: order-store-orders
               uri: ${ORDER_SERVICE_URL:http://localhost:8082}
               order: 1
               predicates:
-                - Path=/v*/stores/*/orders/**
+                - Path=/api/v*/stores/*/orders/**
 
             - id: store
               uri: ${STORE_SERVICE_URL:http://localhost:8081}
               order: 2
               predicates:
-                - Path=/v*/stores/**,/v*/categories/**
+                - Path=/api/v*/stores/**,/api/v*/categories/**
 
             - id: order
               uri: ${ORDER_SERVICE_URL:http://localhost:8082}
               order: 3
               predicates:
-                - Path=/v*/orders/**,/v*/cart/**
+                - Path=/api/v*/orders/**,/api/v*/cart/**
 
             - id: payment
               uri: ${PAYMENT_SERVICE_URL:http://localhost:8083}
               order: 4
               predicates:
-                - Path=/v*/payments/**
+                - Path=/api/v*/payments/**
 
             - id: delivery
               uri: ${DELIVERY_SERVICE_URL:http://localhost:8084}
               order: 5
               predicates:
-                - Path=/v*/deliveries/**
+                - Path=/api/v*/deliveries/**
 
             - id: member
               uri: ${MEMBER_SERVICE_URL:http://localhost:8085}
               order: 6
               predicates:
-                - Path=/v*/auth/**,/v*/members/**
+                - Path=/api/v*/auth/**,/api/v*/members/**
 
 management:
   endpoints:
