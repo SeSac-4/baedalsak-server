@@ -1,7 +1,7 @@
 package com.baedalsak.order.event;
 
 import com.baedalsak.order.config.RabbitConfig;
-import com.baedalsak.order.support.IntegrationTest;
+import com.baedalsak.order.support.RabbitMQIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
@@ -11,10 +11,6 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -26,23 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Outbox 발행기 (#31). 실제 RabbitMQ(컨테이너)에 1초 폴링으로 발행되는지, 발행 확인을 받은 행만 published_at 이 찍히는지 확인한다.
  * 받는 쪽 큐(delivery.order-accepted 역할)는 테스트가 직접 선언한다.
  */
-@TestPropertySource(properties = "outbox.publisher.enabled=true")
-class OutboxPublisherTest extends IntegrationTest {
+class OutboxPublisherTest extends RabbitMQIntegrationTest {
 
-    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4.2");
     static final String TEST_QUEUE = "test.order-accepted";
-
-    static {
-        RABBIT.start();
-    }
-
-    @DynamicPropertySource
-    static void rabbit(DynamicPropertyRegistry registry) {
-        registry.add("spring.rabbitmq.host", RABBIT::getHost);
-        registry.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
-        registry.add("spring.rabbitmq.username", RABBIT::getAdminUsername);
-        registry.add("spring.rabbitmq.password", RABBIT::getAdminPassword);
-    }
 
     @Autowired
     RabbitTemplate rabbitTemplate;

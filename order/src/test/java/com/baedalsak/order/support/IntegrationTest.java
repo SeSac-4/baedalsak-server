@@ -16,8 +16,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-// 발행기는 RabbitMQ 가 필요해서 기본은 끈다. 발행 테스트(OutboxPublisherTest)만 켠다
-@TestPropertySource(properties = "outbox.publisher.enabled=false")
+// 발행기·리스너는 RabbitMQ 가 필요해서 기본은 끈다. RabbitMQIntegrationTest 를 상속한 테스트만 켠다
+@TestPropertySource(properties = {
+        "outbox.publisher.enabled=false",
+        "spring.rabbitmq.listener.simple.auto-startup=false"
+})
 public abstract class IntegrationTest {
 
     // 테스트 클래스 전체가 컨테이너 1개를 공유한다

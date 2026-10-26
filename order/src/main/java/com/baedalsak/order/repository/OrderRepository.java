@@ -35,4 +35,30 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     int accept(@Param("orderId") Long orderId, @Param("ownerId") Long ownerId,
                @Param("estimatedReadyAt") OffsetDateTime estimatedReadyAt, @Param("now") OffsetDateTime now,
                @Param("paid") OrderStatus paid, @Param("cooking") OrderStatus cooking);
+
+    // PaymentApproved: 결제대기이고 금액이 같을 때만 결제완료로 (상태 전이 탭 5행). 0 이면 바뀐 행 없음
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Order o
+               SET o.status = :paid, o.updatedAt = :now
+             WHERE o.id = :orderId AND o.status = :pendingPayment AND o.totalAmount = :amount
+            """)
+    int markPaid(@Param("orderId") Long orderId, @Param("amount") Integer amount, @Param("now") OffsetDateTime now,
+                 @Param("pendingPayment") OrderStatus pendingPayment, @Param("paid") OrderStatus paid);
+
+    // DeliveryPickedUp·DeliveryCompleted: 기대한 이전 상태일 때만 다음 상태로 (상태 전이 탭 7·8행)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Order o
+               SET o.status = :to, o.updatedAt = :now
+             WHERE o.id = :orderId AND o.status = :from
+            """)
+    int changeStatus(@Param("orderId") Long orderId, @Param("from") OrderStatus from, @Param("to") OrderStatus to,
+                     @Param("now") OffsetDateTime now);
+
+    // DeliveryAssigned: 배차된 라이더 이름 저장 (테이블 정의서 rider_name)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Order o SET o.riderName = :riderName, o.updatedAt = :now WHERE o.id = :orderId")
+    int assignRider(@Param("orderId") Long orderId, @Param("riderName") String riderName,
+                    @Param("now") OffsetDateTime now);
 }
