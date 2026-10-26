@@ -57,8 +57,10 @@ class OrderPersistenceTest extends IntegrationTest {
     void 총액이_항목_금액_더하기_배달비가_아니면_DB_가_거부한다() {
         assertThatThrownBy(() -> jdbcTemplate.update("""
                 INSERT INTO orders.orders (customer_id, store_id, owner_id, store_name, delivery_address,
-                    customer_phone, customer_email, owner_email, items_amount, delivery_fee, total_amount)
-                VALUES (7, 1, 10, '싹분식', '주소', '010-1234-5678', 'c@x', 'o@x', 10000, 3000, 9999)
+                    delivery_dong, pickup_address, customer_phone, customer_email, owner_email,
+                    items_amount, delivery_fee, total_amount)
+                VALUES (7, 1, 10, '싹분식', '주소', '연남동', '가게 주소', '010-1234-5678', 'c@x', 'o@x',
+                    10000, 3000, 9999)
                 """))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("orders_total_ck");
@@ -112,6 +114,8 @@ class OrderPersistenceTest extends IntegrationTest {
                 .ownerId(10L)
                 .storeName("싹분식")
                 .deliveryAddress("서울시 마포구 2")
+                .deliveryDong("연남동")
+                .pickupAddress("서울시 마포구 1")
                 .customerPhone("010-1234-5678")
                 .customerEmail("customer@baedalsak.click")
                 .ownerEmail("owner@baedalsak.click")
