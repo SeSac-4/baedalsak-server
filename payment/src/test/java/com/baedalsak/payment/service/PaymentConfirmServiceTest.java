@@ -41,7 +41,8 @@ class PaymentConfirmServiceTest {
     static final LoginMember CUSTOMER = new LoginMember(1L, MemberRole.CUSTOMER);
     static final ConfirmPaymentRequest REQUEST = new ConfirmPaymentRequest("tgen_key", "BDS-1005-1", 18000);
     static final TossConfirmResponse TOSS = new TossConfirmResponse("tgen_key", "BDS-1005-1", "카드",
-            OffsetDateTime.parse("2026-10-26T15:30:00+09:00"), new TossConfirmResponse.Receipt("https://receipt/1"));
+            OffsetDateTime.parse("2026-10-26T15:30:00+09:00"), new TossConfirmResponse.Receipt("https://receipt/1"),
+            new TossConfirmResponse.Card("30024234"));
 
     @Mock
     PaymentRepository paymentRepository;
@@ -61,6 +62,7 @@ class PaymentConfirmServiceTest {
         ReflectionTestUtils.setField(approved, "method", "카드");
         ReflectionTestUtils.setField(approved, "approvedAt", TOSS.approvedAt());
         ReflectionTestUtils.setField(approved, "receiptUrl", "https://receipt/1");
+        ReflectionTestUtils.setField(approved, "approvalNumber", "30024234");
         given(paymentApprover.approve(7L, TOSS)).willReturn(approved);
 
         PaymentDetailResponse response = paymentConfirmService.confirm(CUSTOMER, REQUEST);
@@ -72,6 +74,7 @@ class PaymentConfirmServiceTest {
         assertThat(response.method()).isEqualTo("카드");
         assertThat(response.approvedAt()).isEqualTo(TOSS.approvedAt());
         assertThat(response.receiptUrl()).isEqualTo("https://receipt/1");
+        assertThat(response.approvalNumber()).isEqualTo("30024234");
     }
 
     @Test

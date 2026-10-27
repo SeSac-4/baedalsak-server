@@ -70,13 +70,17 @@ class PaymentQueryServiceTest {
 
     @Test
     void 결제_ID로_상세를_돌려준다() {
-        given(paymentRepository.findById(7L)).willReturn(Optional.of(payment(7L, 1005L, 1L, 18000)));
+        Payment approved = payment(7L, 1005L, 1L, 18000);
+        ReflectionTestUtils.setField(approved, "status", PaymentStatus.APPROVED);
+        ReflectionTestUtils.setField(approved, "approvalNumber", "30024234");
+        given(paymentRepository.findById(7L)).willReturn(Optional.of(approved));
 
         PaymentDetailResponse response = paymentQueryService.getPayment(CUSTOMER, 7L);
 
         assertThat(response.paymentId()).isEqualTo(7L);
         assertThat(response.orderId()).isEqualTo(1005L);
         assertThat(response.amount()).isEqualTo(18000);
+        assertThat(response.approvalNumber()).isEqualTo("30024234");
     }
 
     @Test
@@ -87,6 +91,8 @@ class PaymentQueryServiceTest {
 
         assertThat(response.paymentId()).isEqualTo(7L);
         assertThat(response.orderId()).isEqualTo(1005L);
+        // 승인 전이거나 카드 결제가 아니면 승인번호는 null
+        assertThat(response.approvalNumber()).isNull();
     }
 
     @Test

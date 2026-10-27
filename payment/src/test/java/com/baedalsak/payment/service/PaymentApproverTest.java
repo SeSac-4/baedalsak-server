@@ -37,7 +37,7 @@ class PaymentApproverTest {
 
     static final OffsetDateTime APPROVED_AT = OffsetDateTime.parse("2026-10-26T15:30:00+09:00");
     static final TossConfirmResponse TOSS = new TossConfirmResponse("tgen_key", "BDS-1005-1", "카드",
-            APPROVED_AT, new TossConfirmResponse.Receipt("https://receipt/1"));
+            APPROVED_AT, new TossConfirmResponse.Receipt("https://receipt/1"), new TossConfirmResponse.Card("30024234"));
 
     @Mock
     PaymentRepository paymentRepository;
@@ -48,7 +48,8 @@ class PaymentApproverTest {
 
     @Test
     void 결제요청됨이면_승인으로_바꾸고_PaymentApproved_outbox를_저장한다() {
-        given(paymentRepository.approve(7L, "tgen_key", "카드", APPROVED_AT, "https://receipt/1",
+        // 승인번호(card.approveNo)도 함께 저장
+        given(paymentRepository.approve(7L, "tgen_key", "카드", APPROVED_AT, "https://receipt/1", "30024234",
                 PaymentStatus.REQUESTED, PaymentStatus.APPROVED)).willReturn(1);
         given(paymentRepository.findById(7L)).willReturn(Optional.of(approvedPayment()));
 
@@ -64,7 +65,7 @@ class PaymentApproverTest {
 
     @Test
     void 이미_승인된_결제면_409_outbox_저장_안_함() {
-        given(paymentRepository.approve(anyLong(), anyString(), anyString(), any(), anyString(), any(), any()))
+        given(paymentRepository.approve(anyLong(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .willReturn(0);
 
         assertThatThrownBy(() -> paymentApprover.approve(7L, TOSS))
@@ -72,6 +73,17 @@ class PaymentApproverTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PaymentErrorCode.PAYMENT_ALREADY_APPROVED);
         verifyNoInteractions(outboxAppender);
+    }
+
+    @Test
+    void 카드_결제가_아니면_승인번호를_null로_저장한다() {
+        TossConfirmResponse easyPayWithoutCard = new TossConfirmResponse("tgen_key", "BDS-1005-1", "간편결제",
+                APPROVED_AT, new TossConfirmResponse.Receipt("https://receipt/1"), null);
+        given(paymentRepository.approve(7L, "tgen_key", "간편결제", APPROVED_AT, "https://receipt/1", null,
+                PaymentStatus.REQUESTED, PaymentStatus.APPROVED)).willReturn(1);
+        given(paymentRepository.findById(7L)).willReturn(Optional.of(approvedPayment()));
+
+        assertThat(paymentApprover.approve(7L, easyPayWithoutCard).getStatus()).isEqualTo(PaymentStatus.APPROVED);
     }
 
     private static Payment approvedPayment() {

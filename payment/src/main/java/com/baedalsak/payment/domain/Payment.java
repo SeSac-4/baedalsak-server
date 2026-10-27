@@ -67,6 +67,10 @@ public class Payment {
   @Column(length = 500)
   private String receiptUrl;
 
+  // 토스 카드사 승인 번호 (card.approveNo). 카드로 결제하지 않았으면 null
+  @Column(length = 8)
+  private String approvalNumber;
+
   @Column(nullable = false, updatable = false)
   private OffsetDateTime createdAt;
   

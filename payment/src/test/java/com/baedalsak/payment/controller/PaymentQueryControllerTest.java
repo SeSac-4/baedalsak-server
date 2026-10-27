@@ -79,7 +79,7 @@ class PaymentQueryControllerTest {
     @Test
     void 주문_ID로_결제_상세() throws Exception {
         given(paymentQueryService.getPaymentByOrder(CUSTOMER, 1005L)).willReturn(
-                new PaymentDetailResponse(7L, 1005L, PaymentStatus.REQUESTED, 18000, null, null, null));
+                new PaymentDetailResponse(7L, 1005L, PaymentStatus.REQUESTED, 18000, null, null, null, null));
 
         mockMvc.perform(get("/v1/payments/by-order/1005")
                         .header("X-Member-Id", "1").header("X-Member-Role", "CUSTOMER"))
@@ -91,7 +91,7 @@ class PaymentQueryControllerTest {
     @Test
     void 결제_ID로_결제_상세() throws Exception {
         given(paymentQueryService.getPayment(CUSTOMER, 7L)).willReturn(
-                new PaymentDetailResponse(7L, 1005L, PaymentStatus.REQUESTED, 18000, null, null, null));
+                new PaymentDetailResponse(7L, 1005L, PaymentStatus.REQUESTED, 18000, null, null, null, null));
 
         mockMvc.perform(get("/v1/payments/7").header("X-Member-Id", "1").header("X-Member-Role", "CUSTOMER"))
                 .andExpect(status().isOk())
