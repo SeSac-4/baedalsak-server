@@ -93,3 +93,11 @@ logging:
   structured:
     format:
       console: logstash               # JSON 로그 (docs 6-1)
+
+# Cognito (인증은 Cognito, member 는 Admin API 창구 — #18)
+#   로컬: .env 의 로컬 풀 값 / AWS: 인프라가 SSM cognito_* 로 주입
+#   자격 증명(키)은 여기 두지 않음 — 로컬 ~/.aws, AWS Pod Identity
+cognito:
+  region: ${AWS_REGION:ap-northeast-2}
+  user-pool-id: ${COGNITO_USER_POOL_ID}
+  client-id: ${COGNITO_CLIENT_ID}
