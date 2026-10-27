@@ -4,9 +4,11 @@ import com.baedalsak.delivery.auth.CurrentMember;
 import com.baedalsak.delivery.auth.LoginMember;
 import com.baedalsak.delivery.dto.DeliveryCreateRequest;
 import com.baedalsak.delivery.dto.DeliveryCreateResponse;
+import com.baedalsak.delivery.dto.DeliveryStatusResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
+import com.baedalsak.delivery.service.DeliveryCompleteService;
 import com.baedalsak.delivery.service.DeliveryCreateService;
 import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
@@ -35,6 +37,7 @@ public class DeliveryController {
     private final DeliveryWaitingService deliveryWaitingService;
     private final DeliveryAcceptService deliveryAcceptService;
     private final DeliveryPickupService deliveryPickupService;
+    private final DeliveryCompleteService deliveryCompleteService;
 
     // 6.1.1 배달 요청 생성 (WAITING). 같은 주문이 이미 있으면 409
     @PostMapping
@@ -59,5 +62,11 @@ public class DeliveryController {
     @PostMapping("/{deliveryId}/pickup")
     public RiderDeliveryResponse pickUp(@PathVariable Long deliveryId, @CurrentMember LoginMember rider) {
         return deliveryPickupService.pickUp(deliveryId, rider.id());
+    }
+
+    // 6.3.2 배달 완료 (라이더). PICKED_UP → DELIVERED. 배정된 라이더 본인만, 아니면 403. 응답에 고객 연락처 없음
+    @PostMapping("/{deliveryId}/complete")
+    public DeliveryStatusResponse complete(@PathVariable Long deliveryId, @CurrentMember LoginMember rider) {
+        return deliveryCompleteService.complete(deliveryId, rider.id());
     }
 }
