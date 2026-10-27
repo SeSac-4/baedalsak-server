@@ -29,10 +29,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
   @Query("""
       UPDATE Payment p
          SET p.status = :approved, p.tossPaymentKey = :tossPaymentKey, p.method = :method,
-             p.approvedAt = :approvedAt, p.receiptUrl = :receiptUrl
+             p.approvedAt = :approvedAt, p.receiptUrl = :receiptUrl, p.approvalNumber = :approvalNumber
        WHERE p.id = :id AND p.status = :requested
       """)
   int approve(@Param("id") Long id, @Param("tossPaymentKey") String tossPaymentKey, @Param("method") String method,
       @Param("approvedAt") OffsetDateTime approvedAt, @Param("receiptUrl") String receiptUrl,
+      @Param("approvalNumber") String approvalNumber,
       @Param("requested") PaymentStatus requested, @Param("approved") PaymentStatus approved);
 }

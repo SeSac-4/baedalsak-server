@@ -28,7 +28,8 @@ public class PaymentApprover {
   @Transactional
   public Payment approve(Long paymentId, TossConfirmResponse approved) {
     int updated = paymentRepository.approve(paymentId, approved.paymentKey(), approved.method(),
-        approved.approvedAt(), approved.receiptUrl(), PaymentStatus.REQUESTED, PaymentStatus.APPROVED);
+        approved.approvedAt(), approved.receiptUrl(), approved.approvalNumber(),
+        PaymentStatus.REQUESTED, PaymentStatus.APPROVED);
     if (updated == 0) {
       throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_APPROVED);
     }
