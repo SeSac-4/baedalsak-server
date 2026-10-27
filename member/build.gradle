@@ -9,6 +9,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'        // RabbitMQ (docs 3-1)
     // docs 5번: 세션·토큰 Redis 는 gateway·member 만 사용
     implementation 'org.springframework.boot:spring-boot-starter-session-data-redis'
+    // AWS SDK v2 — Cognito Admin API (가입·로그인·갱신·폐기). 자격 증명은 코드에 두지 않음
+    //   로컬: ~/.aws 의 내 IAM 키 / AWS: Pod Identity (기본 자격 증명 체인이 알아서 찾음)
+    implementation platform('software.amazon.awssdk:bom:2.57.3')
+    implementation 'software.amazon.awssdk:cognitoidentityprovider'
     
     //공통 모듈 사용
     implementation project(':common')
