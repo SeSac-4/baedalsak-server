@@ -22,7 +22,9 @@ public record OrderAcceptedEvent(
         String deliveryDong,
         Integer deliveryFee,
         String riderRequest,
-        OffsetDateTime estimatedReadyAt
+        OffsetDateTime estimatedReadyAt,
+        String customerEmail,
+        String ownerEmail
 ) {
     public static final String TYPE = "OrderAccepted";
 
@@ -37,6 +39,8 @@ public record OrderAcceptedEvent(
                 .deliveryAddress(deliveryAddress)
                 .deliveryDong(deliveryDong)
                 .customerPhone(customerPhone)
+                .customerEmail(customerEmail)
+                .ownerEmail(ownerEmail)
                 .riderRequest(riderRequest)
                 .deliveryFee(deliveryFee)
                 .estimatedReadyAt(estimatedReadyAt)

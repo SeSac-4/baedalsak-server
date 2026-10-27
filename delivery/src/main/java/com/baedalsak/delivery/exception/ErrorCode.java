@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "배달 정보를 찾을 수 없습니다."),
     DELIVERY_ALREADY_ASSIGNED(HttpStatus.CONFLICT, "이미 배차된 주문입니다."),
     DELIVERY_INVALID_STATUS(HttpStatus.CONFLICT, "현재 배달 상태에서는 처리할 수 없습니다.");
