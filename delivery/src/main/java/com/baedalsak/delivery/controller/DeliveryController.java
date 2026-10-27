@@ -10,6 +10,7 @@ import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
 import com.baedalsak.delivery.service.DeliveryCreateService;
+import com.baedalsak.delivery.service.DeliveryDetailService;
 import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
 import jakarta.validation.Valid;
@@ -38,6 +39,7 @@ public class DeliveryController {
     private final DeliveryAcceptService deliveryAcceptService;
     private final DeliveryPickupService deliveryPickupService;
     private final DeliveryCompleteService deliveryCompleteService;
+    private final DeliveryDetailService deliveryDetailService;
 
     // 6.1.1 배달 요청 생성 (WAITING). 같은 주문이 이미 있으면 409
     @PostMapping
@@ -68,5 +70,11 @@ public class DeliveryController {
     @PostMapping("/{deliveryId}/complete")
     public DeliveryStatusResponse complete(@PathVariable Long deliveryId, @CurrentMember LoginMember rider) {
         return deliveryCompleteService.complete(deliveryId, rider.id());
+    }
+
+    // 6.4.1 주문의 배달 상태 (고객·사장님). customer_id 또는 owner_id 가 요청자일 때만, 아니면 403. 배달 생성 전이면 404
+    @GetMapping("/by-order/{orderId}")
+    public DeliveryStatusResponse getByOrder(@PathVariable Long orderId, @CurrentMember LoginMember member) {
+        return deliveryDetailService.getByOrderId(orderId, member.id());
     }
 }
