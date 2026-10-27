@@ -53,7 +53,9 @@ class TossPaymentsClientTest {
                 .andRespond(withSuccess("""
                         {"paymentKey":"tgen_key","orderId":"BDS-1005-1","status":"DONE","method":"카드",
                          "totalAmount":18000,"approvedAt":"2026-10-26T15:30:00+09:00",
-                         "receipt":{"url":"https://dashboard.tosspayments.com/receipt/1"}}
+                         "receipt":{"url":"https://dashboard.tosspayments.com/receipt/1"},
+                         "card":{"issuerCode":"41","number":"51073761****913*","approveNo":"30024234"},
+                         "easyPay":null}
                         """, MediaType.APPLICATION_JSON));
 
         TossConfirmResponse response = client.confirm(REQUEST);
@@ -62,6 +64,37 @@ class TossPaymentsClientTest {
         assertThat(response.method()).isEqualTo("카드");
         assertThat(response.approvedAt()).isEqualTo("2026-10-26T15:30:00+09:00");
         assertThat(response.receiptUrl()).isEqualTo("https://dashboard.tosspayments.com/receipt/1");
+        assertThat(response.approvalNumber()).isEqualTo("30024234");
+    }
+
+    @Test
+    void 간편결제를_등록_카드로_결제하면_카드_승인번호를_받는다() {
+        // 토스 코어 API 응답 예시: method 간편결제 + easyPay.provider + card.approveNo
+        server.expect(requestTo("http://toss/v1/payments/confirm"))
+                .andRespond(withSuccess("""
+                        {"paymentKey":"tgen_key","orderId":"BDS-1005-1","status":"DONE","method":"간편결제",
+                         "approvedAt":"2026-10-26T15:30:00+09:00",
+                         "card":{"approveNo":"47042234","amount":18000},
+                         "easyPay":{"provider":"토스페이","amount":0,"discountAmount":0}}
+                        """, MediaType.APPLICATION_JSON));
+
+        TossConfirmResponse response = client.confirm(REQUEST);
+
+        assertThat(response.method()).isEqualTo("간편결제");
+        assertThat(response.approvalNumber()).isEqualTo("47042234");
+    }
+
+    @Test
+    void 카드_정보가_없으면_승인번호는_null() {
+        // 간편결제를 계좌·포인트로 결제하거나 계좌이체로 결제하면 card 가 없다
+        server.expect(requestTo("http://toss/v1/payments/confirm"))
+                .andRespond(withSuccess("""
+                        {"paymentKey":"tgen_key","orderId":"BDS-1005-1","status":"DONE","method":"간편결제",
+                         "approvedAt":"2026-10-26T15:30:00+09:00","card":null,
+                         "easyPay":{"provider":"토스페이","amount":18000,"discountAmount":0}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.confirm(REQUEST).approvalNumber()).isNull();
     }
 
     @Test
