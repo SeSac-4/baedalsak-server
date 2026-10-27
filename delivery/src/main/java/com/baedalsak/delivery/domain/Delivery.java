@@ -58,6 +58,11 @@ public class Delivery {
     @Column(nullable = false, length = 20)
     private String customerPhone;
 
+    // 메일 수신자 (이벤트 customerEmail·ownerEmail). V2 이전에 생성된 행은 NULL
+    private String customerEmail;
+
+    private String ownerEmail;
+
     @Column(length = 200)
     private String riderRequest;
 
@@ -91,8 +96,8 @@ public class Delivery {
     @Builder
     private Delivery(Long orderId, Long customerId, Long ownerId, Long storeId, String storeName,
                      String pickupAddress, String deliveryAddress, String deliveryDong,
-                     String customerPhone, String riderRequest, Integer deliveryFee,
-                     OffsetDateTime estimatedReadyAt) {
+                     String customerPhone, String customerEmail, String ownerEmail,
+                     String riderRequest, Integer deliveryFee, OffsetDateTime estimatedReadyAt) {
         this.orderId = orderId;
         this.customerId = customerId;
         this.ownerId = ownerId;
@@ -102,6 +107,8 @@ public class Delivery {
         this.deliveryAddress = deliveryAddress;
         this.deliveryDong = deliveryDong;
         this.customerPhone = customerPhone;
+        this.customerEmail = customerEmail;
+        this.ownerEmail = ownerEmail;
         this.riderRequest = riderRequest;
         this.deliveryFee = deliveryFee;
         this.estimatedReadyAt = estimatedReadyAt;

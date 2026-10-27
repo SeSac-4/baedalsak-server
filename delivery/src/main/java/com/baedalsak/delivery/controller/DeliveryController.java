@@ -8,6 +8,7 @@ import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryCreateService;
+import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class DeliveryController {
     private final DeliveryCreateService deliveryCreateService;
     private final DeliveryWaitingService deliveryWaitingService;
     private final DeliveryAcceptService deliveryAcceptService;
+    private final DeliveryPickupService deliveryPickupService;
 
     // 6.1.1 배달 요청 생성 (WAITING). 같은 주문이 이미 있으면 409
     @PostMapping
@@ -51,5 +53,11 @@ public class DeliveryController {
     @PostMapping("/{deliveryId}/accept")
     public RiderDeliveryResponse accept(@PathVariable Long deliveryId, @CurrentMember LoginMember rider) {
         return deliveryAcceptService.accept(deliveryId, rider.id());
+    }
+
+    // 6.3.1 픽업 완료 (라이더). ASSIGNED → PICKED_UP. 배정된 라이더 본인만, 아니면 403
+    @PostMapping("/{deliveryId}/pickup")
+    public RiderDeliveryResponse pickUp(@PathVariable Long deliveryId, @CurrentMember LoginMember rider) {
+        return deliveryPickupService.pickUp(deliveryId, rider.id());
     }
 }
