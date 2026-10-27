@@ -11,7 +11,8 @@ public record PaymentDetailResponse(Long paymentId,
   Integer amount,
   String method,             // 결제수단 (토스 응답값)
   OffsetDateTime approvedAt,
-  String receiptUrl) {       // 영수증 링크
+  String receiptUrl,         // 영수증 링크
+  String approvalNumber) {   // 카드사 승인 번호. 카드 결제가 아니거나 승인 전이면 null
 
   public static PaymentDetailResponse from(Payment payment) {
     return new PaymentDetailResponse(
@@ -21,6 +22,7 @@ public record PaymentDetailResponse(Long paymentId,
       payment.getAmount(),
       payment.getMethod(),
       payment.getApprovedAt(),
-      payment.getReceiptUrl());
+      payment.getReceiptUrl(),
+      payment.getApprovalNumber());
   }
 }
