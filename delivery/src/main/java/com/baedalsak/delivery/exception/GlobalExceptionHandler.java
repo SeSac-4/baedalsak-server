@@ -19,7 +19,7 @@ public class GlobalExceptionHandler {
     ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
         ErrorCode code = e.getErrorCode();
         return ResponseEntity.status(code.getStatus())
-                .body(ErrorResponse.of(code, MDC.get("traceId")));
+                .body(ErrorResponse.of(code, e.getMessage(), MDC.get("traceId")));
     }
 
     @ExceptionHandler(DeliveryAlreadyExistsException.class)

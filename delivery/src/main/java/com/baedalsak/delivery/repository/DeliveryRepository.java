@@ -45,4 +45,22 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
                         @Param("riderId") Long riderId,
                         @Param("riderName") String riderName,
                         @Param("assignedAt") OffsetDateTime assignedAt);
+
+    /**
+     * 픽업 완료 (6.3.1). 배정된 라이더 본인이고 ASSIGNED 일 때만 PICKED_UP 으로 바꾸는 조건부 UPDATE (설계서 '상태 전이' 탭).
+     * 같은 요청이 두 번 와도 두 번째는 WHERE 에서 걸려 0행 → 이벤트가 중복 발행되지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Delivery d
+               SET d.status = com.baedalsak.delivery.domain.DeliveryStatus.PICKED_UP,
+                   d.pickedUpAt = :pickedUpAt,
+                   d.updatedAt = :pickedUpAt
+             WHERE d.id = :deliveryId
+               AND d.riderId = :riderId
+               AND d.status = com.baedalsak.delivery.domain.DeliveryStatus.ASSIGNED
+            """)
+    int pickUpIfAssigned(@Param("deliveryId") Long deliveryId,
+                         @Param("riderId") Long riderId,
+                         @Param("pickedUpAt") OffsetDateTime pickedUpAt);
 }

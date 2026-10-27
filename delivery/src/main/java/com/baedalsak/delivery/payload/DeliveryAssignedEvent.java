@@ -15,7 +15,9 @@ public record DeliveryAssignedEvent(
         Long ownerId,
         Long riderId,
         String riderName,
-        OffsetDateTime assignedAt
+        OffsetDateTime assignedAt,
+        String customerEmail,
+        String ownerEmail
 ) {
     public static final String TYPE = "DeliveryAssigned";
     public static final String ROUTING_KEY = "delivery.assigned";
@@ -28,6 +30,8 @@ public record DeliveryAssignedEvent(
                 delivery.getOwnerId(),
                 delivery.getRiderId(),
                 delivery.getRiderName(),
-                delivery.getAssignedAt());
+                delivery.getAssignedAt(),
+                delivery.getCustomerEmail(),
+                delivery.getOwnerEmail());
     }
 }
