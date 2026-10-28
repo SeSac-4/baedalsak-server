@@ -10,6 +10,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'        // RabbitMQ (docs 3-1)
     // [내부] 동기 호출 클라이언트 (order). Boot 가 만든 RestClient.Builder 를 써야 traceId 가 HTTP 헤더로 전파됨 (docs 6-2)
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    // AWS SDK v2 — SES 결제완료 메일 (#37). member 와 같은 BOM 버전. 자격 증명은 코드에 두지 않음
+    //   로컬: local 프로필은 발송 대신 로그만 / AWS: Pod Identity (기본 자격 증명 체인이 알아서 찾음)
+    implementation platform('software.amazon.awssdk:bom:2.57.3')
+    implementation 'software.amazon.awssdk:sesv2'
 
     runtimeOnly 'org.postgresql:postgresql'
 }

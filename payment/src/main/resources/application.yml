@@ -96,6 +96,16 @@ internal-api:
   connect-timeout: 1s
   read-timeout: 2s
 
+# 결제완료 메일 (#37, docs 10번). PaymentApproved 를 자기 메일 큐로 받아 SES 템플릿으로 동기 발송
+#   local 프로필은 발송 대신 로그만 (docs 10-4). 자격 증명은 두지 않음 — AWS 는 Pod Identity
+#   템플릿은 AWS SES 에 등록하고 저장소에는 두지 않는다
+payment-mail:
+  region: ${AWS_REGION:ap-northeast-2}            # SES 리전 (docs 3번 AWS_REGION, 파드에 없으면 기본값)
+  from: no-reply@baedalsak.click                  # 팀 공통 발신 주소 (인증 도메인 baedalsak.click) — 확정 전 임시값
+  templates:
+    customer: baedalsak-payment-approved-customer # 고객 결제완료 메일
+    owner: baedalsak-payment-approved-owner       # 사장님 새 주문 결제 메일
+
 # 토스페이먼츠 결제 승인 (설계서 '동기 호출' 탭, N1.4: 5초 타임아웃, 재시도 없음)
 toss:
   base-url: https://api.tosspayments.com
