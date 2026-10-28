@@ -73,4 +73,31 @@ public class AuthService {
       throw e;
     }
   }
+
+    /**
+   * 로그아웃 (API 명세 8.2.2) — 무슨 일이 있어도 성공. 예외를 밖으로 던지지 않는다.
+   * 세션 ID 쿠키만 있으면 동작 (access 토큰이 만료됐어도 됨).
+   * access 토큰 jti 블랙리스트 등록은 gateway 인증(#23)·블랙리스트(#41) 때 추가.
+   */
+  public void logout(String sessionId) {
+    if (sessionId == null || sessionId.isBlank()) {
+      return;   // 이미 로그아웃 상태 — 쿠키 삭제만 하면 됨
+    }
+
+    // ② 폐기할 refresh 토큰 꺼내기. Redis 장애면 Cognito 폐기는 건너뛴다 (Redis 키는 TTL 로 결국 사라짐)
+    String refreshToken = null;
+    try {
+      refreshToken = refreshSessionStore.find(sessionId).orElse(null);
+    } catch (BusinessException e) {
+      log.warn("로그아웃 중 refresh 세션 조회 실패 — Cognito 폐기 건너뜀");
+    }
+
+    // ③ 세션 삭제 = 실질적인 로그아웃 (이후 /refresh 는 401). 실패해도 예외 없음
+    refreshSessionStore.delete(sessionId);
+
+    // ④ 2차 잠금: refresh 토큰 자체를 Cognito 에서 폐기. 실패해도 예외 없음
+    if (refreshToken != null) {
+      cognitoAuthClient.revoke(refreshToken);
+    }
+  }
 }
