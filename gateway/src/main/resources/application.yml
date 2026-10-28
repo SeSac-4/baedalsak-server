@@ -83,7 +83,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info          # 후순위: ,prometheus (docs 9-2)
+        include: health,info,prometheus   # prometheus: Grafana 지표 (#91). AWS 는 8081(비공개)에서만
   endpoint:
     health:
       probes:

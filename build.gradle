@@ -99,7 +99,7 @@ configure(subprojects.findAll { it.name in serviceModules }) {
         implementation 'io.micrometer:micrometer-tracing-bridge-brave'
         // 후순위 (관측성) — 쓸 때 주석 해제 (docs 9-2)
         // implementation 'org.springframework.boot:spring-boot-starter-zipkin'   // Zipkin 전송 (위 2줄 대신)
-        // runtimeOnly    'io.micrometer:micrometer-registry-prometheus'          // /actuator/prometheus
+        runtimeOnly    'io.micrometer:micrometer-registry-prometheus'          // /actuator/prometheus
 
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
