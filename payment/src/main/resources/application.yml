@@ -53,15 +53,17 @@ spring:
       observation-enabled: true             # 발행 시 traceId 를 메시지 헤더에 실음
     listener:
       simple:
-        # ## 미리 받아 두는 메시지 수 (부하 테스트 때 조정)
-        #   1건 처리가 느릴수록(DB 트랜잭션) 작게, 빠를수록 크게. 파드가 죽으면 이만큼 재전달됨
-        prefetch: 10
+        # payment 의 리스너는 메일 리스너뿐 → 메일 리스너 규칙 (docs 10-4, 설계서 '이벤트 목록' 메일 리스너)
+        acknowledge-mode: auto              # 메서드가 정상 종료돼야 ack (SES 동기 발송이 끝난 뒤)
+        concurrency: 1                      # 메일은 한 건씩 순서대로
+        max-concurrency: 1
+        prefetch: 1                         # 파드가 죽어도 재전달은 1건
         observation-enabled: true           # 소비 시 헤더의 traceId 를 이어받음
         default-requeue-rejected: false     # 실패 메시지를 큐에 되돌리지 않음 → DLQ (무한 재처리 방지)
         retry:                              # 앱 안에서 재시도 후 포기 → DLQ
           enabled: true
-          max-attempts: 3                   # 최초 1회 + 재시도 2회
-          initial-interval: 1s
+          max-retries: 2                    # 최대 3회 시도 = 최초 1회 + 재시도 2회 (Boot 4 속성 이름)
+          initial-interval: 2s
           multiplier: 2
           max-interval: 10s
 
