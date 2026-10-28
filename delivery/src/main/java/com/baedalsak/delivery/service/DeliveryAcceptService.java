@@ -12,6 +12,7 @@ import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -54,12 +55,22 @@ public class DeliveryAcceptService {
 
     // 배달 UPDATE 와 outbox INSERT 를 한 트랜잭션에 → 배정됐는데 이벤트가 빠지는 일이 없다 (docs 3-2)
     private RiderDeliveryResponse assign(Long deliveryId, Long riderId, String riderName) {
-        // 라이더는 진행 중 배달을 동시에 1건만 (API 명세 6.2.2 비고). 같은 배달을 두 번 누른 경우도 여기서 걸린다
+        // 라이더는 진행 중 배달을 동시에 1건만 (API 명세 6.2.2 비고). 순차 요청은 여기서 걸린다.
+        // 잠금 없는 SELECT 라 동시 요청은 둘 다 통과할 수 있다 → 아래 UPDATE 에서 delivery_rider_active_uq 가 최종 보장
         if (deliveryRepository.existsByRiderIdAndStatusIn(riderId, DeliveryStatus.ACTIVE)) {
             throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
         }
 
-        if (deliveryRepository.assignIfWaiting(deliveryId, riderId, riderName, OffsetDateTime.now()) == 0) {
+        int updated;
+        try {
+            updated = deliveryRepository.assignIfWaiting(deliveryId, riderId, riderName, OffsetDateTime.now());
+        } catch (DataIntegrityViolationException e) {
+            // 같은 라이더의 다른 수락이 먼저 커밋됨. 트랜잭션이 aborted 라 추가 쿼리 없이 바로 던져 롤백한다
+            log.info("rider already has active delivery: deliveryId={}, riderId={}", deliveryId, riderId);
+            throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
+        }
+
+        if (updated == 0) {
             // 0행: 없는 배달이거나, 다른 라이더가 먼저 배정받음
             if (!deliveryRepository.existsById(deliveryId)) {
                 throw new BusinessException(ErrorCode.DELIVERY_NOT_FOUND);
