@@ -51,4 +51,17 @@ public class AuthController {
             authCookies.access(tokens.accessToken(), Duration.ofSeconds(tokens.expiresInSeconds())).toString())
         .build();
   }
+
+    // 로그아웃 (API 명세 8.2.2) — 항상 204 + 쿠키 2개 삭제
+  //   access 토큰이 만료됐어도 세션 쿠키만 있으면 동작. 세션 쿠키가 없어도 204
+  @PostMapping("/logout")
+  public ResponseEntity<Void> logout(
+      @CookieValue(name = AuthCookies.SESSION, required = false) String sessionId) {
+    authService.logout(sessionId);
+
+    return ResponseEntity.noContent()
+        .header(HttpHeaders.SET_COOKIE, authCookies.clearAccess().toString())
+        .header(HttpHeaders.SET_COOKIE, authCookies.clearSession().toString())
+        .build();
+  }
 }
