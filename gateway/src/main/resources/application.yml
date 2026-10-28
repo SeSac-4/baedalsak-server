@@ -95,6 +95,20 @@ management:
     # export:
     #   zipkin:
     #     endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+    # 관측성 (#91, 인프라 문서 2026-10-28)
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true      # HTTP 응답 시간 p95 계산용 bucket
+        spring.cloud.gateway.requests: true   # 라우트별 응답 시간 p95
+  otlp:
+    metrics:
+      export:
+        enabled: false                  # 지표는 Prometheus 가 수집 — OTLP 중복 전송 끔
+  logging:
+    export:
+      otlp:
+        enabled: false                  # 로그는 stdout → Fluent Bit → Loki — OTLP 중복 전송 끔
 
 logging:
   structured:
