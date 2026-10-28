@@ -2,8 +2,7 @@
 # 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
 # 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
 
-# 비밀값 (docs 3번 🔒) — 기본값 없이 환경 변수로만 받는다
-#   JWT_SECRET: 토큰 발급 서명 키 (32바이트 이상)
+# 토큰은 Cognito 가 발급한다 — 비밀 키(JWT_SECRET)는 쓰지 않음. Cognito 설정은 파일 아래 cognito.*
 
 server:
   port: ${SERVER_PORT:8085}          # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
@@ -76,7 +75,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info          # 후순위: ,prometheus (docs 9-2)
+        include: health,info,prometheus   # prometheus: Grafana 지표 (#91). AWS 는 8081(비공개)에서만
   endpoint:
     health:
       probes:
@@ -88,6 +87,19 @@ management:
     # export:
     #   zipkin:
     #     endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+    # 관측성 (#91, 인프라 문서 2026-10-28)
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true      # HTTP 응답 시간 p95 계산용 bucket
+  otlp:
+    metrics:
+      export:
+        enabled: false                  # 지표는 Prometheus 가 수집 — OTLP 중복 전송 끔
+  logging:
+    export:
+      otlp:
+        enabled: false                  # 로그는 stdout → Fluent Bit → Loki — OTLP 중복 전송 끔
 
 logging:
   structured:

@@ -2,6 +2,8 @@ package com.baedalsak.delivery.repository;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
-import java.util.List;
+import java.util.Optional;
 
 /**
  * delivery 테이블.
@@ -18,11 +20,18 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
     boolean existsByOrderId(Long orderId);
 
-    // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
-    List<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status);
+    // 주문의 배달 (6.4.1). order_id UNIQUE 인덱스 사용
+    Optional<Delivery> findByOrderId(Long orderId);
 
-    // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_idx (rider_id) WHERE status IN (...) 사용
+    // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
+    Page<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status, Pageable pageable);
+
+    // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_uq (rider_id) WHERE status IN (...) 사용
     boolean existsByRiderIdAndStatusIn(Long riderId, Collection<DeliveryStatus> statuses);
+
+    // 라이더의 진행 중 배달 (6.4.2). 같은 delivery_rider_active_uq 사용. UNIQUE 라 0건 또는 1건
+    Optional<Delivery> findFirstByRiderIdAndStatusInOrderByAssignedAtAscIdAsc(Long riderId,
+                                                                              Collection<DeliveryStatus> statuses);
 
     /**
      * 배차 수락 (6.2.2, N2.5). WAITING 일 때만 ASSIGNED 로 바꾸는 조건부 UPDATE. 바뀐 행 수(0 또는 1)를 돌려준다.
@@ -63,4 +72,22 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     int pickUpIfAssigned(@Param("deliveryId") Long deliveryId,
                          @Param("riderId") Long riderId,
                          @Param("pickedUpAt") OffsetDateTime pickedUpAt);
+
+    /**
+     * 배달 완료 (6.3.2). 배정된 라이더 본인이고 PICKED_UP 일 때만 DELIVERED 로 바꾸는 조건부 UPDATE (설계서 '상태 전이' 탭).
+     * 같은 요청이 두 번 와도 두 번째는 WHERE 에서 걸려 0행 → 이벤트가 중복 발행되지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Delivery d
+               SET d.status = com.baedalsak.delivery.domain.DeliveryStatus.DELIVERED,
+                   d.completedAt = :completedAt,
+                   d.updatedAt = :completedAt
+             WHERE d.id = :deliveryId
+               AND d.riderId = :riderId
+               AND d.status = com.baedalsak.delivery.domain.DeliveryStatus.PICKED_UP
+            """)
+    int completeIfPickedUp(@Param("deliveryId") Long deliveryId,
+                           @Param("riderId") Long riderId,
+                           @Param("completedAt") OffsetDateTime completedAt);
 }

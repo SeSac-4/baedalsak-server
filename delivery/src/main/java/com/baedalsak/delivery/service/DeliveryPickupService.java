@@ -48,7 +48,7 @@ public class DeliveryPickupService {
 
         log.info("delivery picked up: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
-        return RiderDeliveryResponse.from(delivery);
+        return RiderDeliveryResponse.withoutCustomerPhone(delivery);
     }
 
     // 0행: 없는 배달(404) / 내 배달 아님(403) / ASSIGNED 가 아님(409, 이미 픽업한 경우 포함)
