@@ -11,5 +11,8 @@ dependencies {
         // Redis: 토큰 블랙리스트 조회·RateLimiter 용 (WebFlux 라 reactive 클라이언트)
     //   Spring Session 은 쓰지 않는다 (세션 ID·Redis 키는 member 가 직접 관리, 2026-10-23 확정)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+        // JWT 검증 (Cognito JWKS 로 서명·만료 확인, #23)
+    //   Boot 4 새 이름. 옛 spring-boot-starter-oauth2-resource-server 는 deprecated
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
     
 }
