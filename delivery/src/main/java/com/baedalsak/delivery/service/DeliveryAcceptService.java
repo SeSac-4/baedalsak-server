@@ -89,6 +89,6 @@ public class DeliveryAcceptService {
 
         log.info("delivery assigned: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
-        return RiderDeliveryResponse.from(delivery);
+        return RiderDeliveryResponse.withoutCustomerPhone(delivery);
     }
 }
