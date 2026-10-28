@@ -69,20 +69,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info          # 후순위: ,prometheus (docs 9-2)
-  endpoint:
-    health:
-      probes:
-        enabled: true                 # /actuator/health/liveness, /readiness 활성화
-  tracing:
-    sampling:
-      probability: 1.0                # 요청 100% 추적 (트래픽이 많아지면 낮춤)
-    # 후순위 (관측성): Zipkin 전송 — starter-zipkin 과 함께 주석 해제 (docs 9-2)
-    # export:
-    #   zipkin:
-    #     endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
-
-logging:
-  structured:
-    format:
-      console: logstash               # JSON 로그 (docs 6-1)
+        include: health,info,prometheus      # prometheus 추가 (health,info 는 유지)
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true           # HTTP 응답 시간 p95 계산용
+  otlp:
+    metrics:
+      export:
+        enabled: false                       # 지표는 Prometheus 가 수집 — OTLP 중복 전송 끔
+  logging:
+    export:
+      otlp:
+        enabled: false                       # 로그는 Loki 가 수집 — OTLP 중복 전송 끔
