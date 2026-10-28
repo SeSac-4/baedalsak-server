@@ -25,7 +25,10 @@ public class SecurityConfig {
             .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
             .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
             .logout(ServerHttpSecurity.LogoutSpec::disable)
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+            // JWT 경비원: 쿠키 __Host-access 에서 토큰을 꺼내(3단계) Cognito 공개키로 서명·만료·iss 검사(2단계)
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .bearerTokenConverter(new CookieBearerTokenConverter())
+                .jwt(Customizer.withDefaults()))
             .authorizeExchange(exchanges -> exchanges
                 .anyExchange().permitAll())   // 1단계: 전부 통과 (2단계부터 조임)
             .build();
