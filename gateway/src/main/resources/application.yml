@@ -3,8 +3,7 @@
 # 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
 #
 # gateway는 DB·RabbitMQ를 직접 보지 않는다.
-# 비밀값 (docs 3번 🔒) — 기본값 없이 환경 변수로만 받는다
-#   JWT_SECRET: 토큰 서명 검증 키 (32바이트 이상)
+# 토큰 검증은 Cognito 공개키(JWKS)로 한다 — 비밀 키(JWT_SECRET)는 쓰지 않음 (#23 에서 COGNITO_* 연결)
 
 server:
   port: ${SERVER_PORT:8080}           # docs 1번 표. 컨테이너 안에서도 8080
