@@ -20,6 +20,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,15 +78,21 @@ public class DeliveryController {
         return deliveryCompleteService.complete(deliveryId, rider.id());
     }
 
-    // 6.4.1 주문의 배달 상태 (고객·사장님). customer_id 또는 owner_id 가 요청자일 때만, 아니면 403. 배달 생성 전이면 404
+    // 6.4.1 주문의 배달 상태 (고객·사장님). customer_id 또는 owner_id 가 요청자일 때만, 아니면 403.
+    // 배달 생성 전(결제대기·결제완료·수락 직후)은 에러가 아니라 204 → 프론트는 주문 상태로 문구를 정한다
     @GetMapping("/by-order/{orderId}")
-    public DeliveryStatusResponse getByOrder(@PathVariable Long orderId, @CurrentMember LoginMember member) {
-        return deliveryDetailService.getByOrderId(orderId, member.id());
+    public ResponseEntity<DeliveryStatusResponse> getByOrder(@PathVariable Long orderId,
+                                                             @CurrentMember LoginMember member) {
+        return deliveryDetailService.getByOrderId(orderId, member.id())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
-    // 6.4.2 진행 중 배달 (라이더). status IN (ASSIGNED, PICKED_UP) 1건, 없으면 404. 고객 연락처는 이 기간에만 노출
+    // 6.4.2 진행 중 배달 (라이더). status IN (ASSIGNED, PICKED_UP) 1건, 없으면 204. 고객 연락처는 이 기간에만 노출
     @GetMapping("/me/active")
-    public RiderDeliveryResponse getActive(@CurrentMember LoginMember rider) {
-        return deliveryActiveService.getActive(rider.id());
+    public ResponseEntity<RiderDeliveryResponse> getActive(@CurrentMember LoginMember rider) {
+        return deliveryActiveService.getActive(rider.id())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 }
