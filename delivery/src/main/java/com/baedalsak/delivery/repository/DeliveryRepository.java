@@ -28,6 +28,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_idx (rider_id) WHERE status IN (...) 사용
     boolean existsByRiderIdAndStatusIn(Long riderId, Collection<DeliveryStatus> statuses);
 
+    // 라이더의 진행 중 배달 (6.4.2). 같은 delivery_rider_active_idx 사용. 1건이 정상이지만 2건이면 먼저 배정된 것
+    Optional<Delivery> findFirstByRiderIdAndStatusInOrderByAssignedAtAscIdAsc(Long riderId,
+                                                                              Collection<DeliveryStatus> statuses);
+
     /**
      * 배차 수락 (6.2.2, N2.5). WAITING 일 때만 ASSIGNED 로 바꾸는 조건부 UPDATE. 바뀐 행 수(0 또는 1)를 돌려준다.
      * 여러 라이더가 동시에 수락하면 PostgreSQL 행 잠금으로 직렬화되고, 뒤에 온 UPDATE 는 앞 트랜잭션 커밋 후
