@@ -8,6 +8,7 @@ import com.baedalsak.delivery.dto.DeliveryStatusResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
+import com.baedalsak.delivery.service.DeliveryActiveService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
 import com.baedalsak.delivery.service.DeliveryCreateService;
 import com.baedalsak.delivery.service.DeliveryDetailService;
@@ -40,6 +41,7 @@ public class DeliveryController {
     private final DeliveryPickupService deliveryPickupService;
     private final DeliveryCompleteService deliveryCompleteService;
     private final DeliveryDetailService deliveryDetailService;
+    private final DeliveryActiveService deliveryActiveService;
 
     // 6.1.1 배달 요청 생성 (WAITING). 같은 주문이 이미 있으면 409
     @PostMapping
@@ -76,5 +78,11 @@ public class DeliveryController {
     @GetMapping("/by-order/{orderId}")
     public DeliveryStatusResponse getByOrder(@PathVariable Long orderId, @CurrentMember LoginMember member) {
         return deliveryDetailService.getByOrderId(orderId, member.id());
+    }
+
+    // 6.4.2 진행 중 배달 (라이더). status IN (ASSIGNED, PICKED_UP) 1건, 없으면 404. 고객 연락처는 이 기간에만 노출
+    @GetMapping("/me/active")
+    public RiderDeliveryResponse getActive(@CurrentMember LoginMember rider) {
+        return deliveryActiveService.getActive(rider.id());
     }
 }

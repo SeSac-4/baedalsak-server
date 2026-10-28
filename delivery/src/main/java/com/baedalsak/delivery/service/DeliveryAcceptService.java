@@ -18,8 +18,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
-import java.util.EnumSet;
-import java.util.Set;
 
 /**
  * 6.2.2 배차 수락. 라이더가 WAITING 배달을 수락해 ASSIGNED 로 배정받는다.
@@ -28,8 +26,6 @@ import java.util.Set;
 @Slf4j
 @Service
 public class DeliveryAcceptService {
-
-    private static final Set<DeliveryStatus> ACTIVE_STATUSES = EnumSet.of(DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP);
 
     private final DeliveryRepository deliveryRepository;
     private final OutboxRepository outboxRepository;
@@ -59,7 +55,7 @@ public class DeliveryAcceptService {
     // 배달 UPDATE 와 outbox INSERT 를 한 트랜잭션에 → 배정됐는데 이벤트가 빠지는 일이 없다 (docs 3-2)
     private RiderDeliveryResponse assign(Long deliveryId, Long riderId, String riderName) {
         // 라이더는 진행 중 배달을 동시에 1건만 (API 명세 6.2.2 비고). 같은 배달을 두 번 누른 경우도 여기서 걸린다
-        if (deliveryRepository.existsByRiderIdAndStatusIn(riderId, ACTIVE_STATUSES)) {
+        if (deliveryRepository.existsByRiderIdAndStatusIn(riderId, DeliveryStatus.ACTIVE)) {
             throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
         }
 
