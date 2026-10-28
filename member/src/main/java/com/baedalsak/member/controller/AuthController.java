@@ -1,13 +1,17 @@
 package com.baedalsak.member.controller;
 
+import java.time.Duration;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.baedalsak.member.auth.AuthCookies;
+import com.baedalsak.member.auth.CognitoTokens;
 import com.baedalsak.member.auth.LoginResult;
 import com.baedalsak.member.dto.LoginRequest;
 import com.baedalsak.member.dto.LoginResponse;
@@ -34,5 +38,17 @@ public class AuthController {
         .header(HttpHeaders.SET_COOKIE, authCookies.access(result.accessToken(), result.accessMaxAge()).toString())
         .header(HttpHeaders.SET_COOKIE, authCookies.session(result.sessionId()).toString())
         .body(result.body());
+  }
+    // 토큰 갱신 (API 명세 8.2.2) — 200 + 새 __Host-access, 본문 없음
+  //   세션 쿠키는 Path=/api/v1/auth 라 브라우저가 이 요청에 자동으로 붙인다
+  @PostMapping("/refresh")
+  public ResponseEntity<Void> refresh(
+      @CookieValue(name = AuthCookies.SESSION, required = false) String sessionId) {
+    CognitoTokens tokens = authService.refresh(sessionId);
+
+    return ResponseEntity.ok()
+        .header(HttpHeaders.SET_COOKIE,
+            authCookies.access(tokens.accessToken(), Duration.ofSeconds(tokens.expiresInSeconds())).toString())
+        .build();
   }
 }
