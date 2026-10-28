@@ -5,6 +5,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
@@ -32,5 +35,15 @@ public class SecurityConfig {
             .authorizeExchange(exchanges -> exchanges
                 .anyExchange().permitAll())   // 1단계: 전부 통과 (2단계부터 조임)
             .build();
+    }
+
+        /**
+     * Cognito 는 access·id 토큰을 같은 키로 서명하므로 서명 검사만으로는 구분이 안 된다.
+     * token_use 가 "access" 인 토큰만 받는다 (id 토큰으로 API 호출 차단).
+     * Boot 가 이 타입의 Bean 을 JwtDecoder 검사 목록에 자동으로 추가한다.
+     */
+    @Bean
+    OAuth2TokenValidator<Jwt> accessTokenOnlyValidator() {
+        return new JwtClaimValidator<String>("token_use", "access"::equals);
     }
 }
