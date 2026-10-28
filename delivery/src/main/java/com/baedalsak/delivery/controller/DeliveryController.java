@@ -5,6 +5,7 @@ import com.baedalsak.delivery.auth.LoginMember;
 import com.baedalsak.delivery.dto.DeliveryCreateRequest;
 import com.baedalsak.delivery.dto.DeliveryCreateResponse;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
+import com.baedalsak.delivery.dto.PageResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
@@ -15,6 +16,8 @@ import com.baedalsak.delivery.service.DeliveryDetailService;
 import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,10 +25,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * 배달 API. gateway 가 /v1/deliveries 이하를 이 서비스로 보낸다.
@@ -50,10 +52,11 @@ public class DeliveryController {
         return deliveryCreateService.create(request);
     }
 
-    // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순. 인증·역할 검사는 gateway 담당
+    // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순 (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
     @GetMapping("/waiting")
-    public List<WaitingDeliveryResponse> getWaiting() {
-        return deliveryWaitingService.getWaitingDeliveries();
+    public PageResponse<WaitingDeliveryResponse> getWaiting(@RequestParam(defaultValue = "0") @Min(0) int page,
+                                                            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return deliveryWaitingService.getWaitingDeliveries(page, size);
     }
 
     // 6.2.2 배차 수락 (라이더). WAITING → ASSIGNED. 먼저 처리된 1명만 성공, 나머지 409 DELIVERY_ALREADY_ASSIGNED

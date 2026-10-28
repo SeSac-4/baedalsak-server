@@ -2,6 +2,8 @@ package com.baedalsak.delivery.repository;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,7 +11,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -23,7 +24,7 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     Optional<Delivery> findByOrderId(Long orderId);
 
     // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
-    List<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status);
+    Page<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status, Pageable pageable);
 
     // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_uq (rider_id) WHERE status IN (...) 사용
     boolean existsByRiderIdAndStatusIn(Long riderId, Collection<DeliveryStatus> statuses);
