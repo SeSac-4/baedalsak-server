@@ -25,7 +25,13 @@ spring:
       host: ${REDIS_SESSION_HOST:localhost}
       port: ${REDIS_SESSION_PORT:6379}
       password: ${REDIS_SESSION_PASSWORD}
-
+    # 토큰 검증 (#23): Cognito 공개키(JWKS)로 AT 서명·만료·발급자(iss) 확인
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI}                          # 토큰 iss 와 같아야 통과
+          jwk-set-uri: ${COGNITO_ISSUER_URI}/.well-known/jwks.json  # 공개키 주소
   cloud:
     gateway:
       # Spring Cloud Gateway 4.3+ 설정 경로 (구 spring.cloud.gateway.routes 는 deprecated)

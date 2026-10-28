@@ -165,6 +165,8 @@ services:
       PAYMENT_SERVICE_URL: http://payment:8080
       DELIVERY_SERVICE_URL: http://delivery:8080
       MEMBER_SERVICE_URL: http://member:8080
+            # 토큰 검증용 Cognito 발급자 (#23). AWS 는 인프라 deploy.sh 가 주입
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:?.env 파일에 COGNITO_ISSUER_URI 를 추가해 주세요}
 
   # 메뉴·가게
   store:
