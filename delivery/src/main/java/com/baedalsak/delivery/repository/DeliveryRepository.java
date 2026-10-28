@@ -25,10 +25,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
     List<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status);
 
-    // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_idx (rider_id) WHERE status IN (...) 사용
+    // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_uq (rider_id) WHERE status IN (...) 사용
     boolean existsByRiderIdAndStatusIn(Long riderId, Collection<DeliveryStatus> statuses);
 
-    // 라이더의 진행 중 배달 (6.4.2). 같은 delivery_rider_active_idx 사용. 1건이 정상이지만 2건이면 먼저 배정된 것
+    // 라이더의 진행 중 배달 (6.4.2). 같은 delivery_rider_active_uq 사용. UNIQUE 라 0건 또는 1건
     Optional<Delivery> findFirstByRiderIdAndStatusInOrderByAssignedAtAscIdAsc(Long riderId,
                                                                               Collection<DeliveryStatus> statuses);
 
