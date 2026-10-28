@@ -48,4 +48,29 @@ public class AuthService {
         sessionId,
         new LoginResponse(member.getId(), member.getRole()));
   }
+
+    /**
+   * access 토큰 갱신 (API 명세 8.2.2). 새 access 토큰만 돌려준다 — refresh 토큰과 세션 ID 는 그대로.
+   * 세션이 없거나 refresh 가 폐기·만료면 401 → 프론트가 로그인 화면으로 보낸다.
+   */
+  public CognitoTokens refresh(String sessionId) {
+    // ① 쿠키 자체가 없음 (로그인 안 했거나 14일 지나 브라우저가 지움)
+    if (sessionId == null || sessionId.isBlank()) {
+      throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
+    }
+
+    // ② Redis 에서 refresh 토큰 꺼내기 — 없으면 로그아웃했거나 만료
+    String refreshToken = refreshSessionStore.find(sessionId)
+        .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+    // ③ Cognito 에 새 access 토큰 요청. 폐기·만료된 refresh 면 401 → 남은 세션도 정리
+    try {
+      return cognitoAuthClient.refresh(refreshToken);
+    } catch (BusinessException e) {
+      if (e.getErrorCode() == CommonErrorCode.UNAUTHORIZED) {
+        refreshSessionStore.delete(sessionId);
+      }
+      throw e;
+    }
+  }
 }
