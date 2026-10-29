@@ -16,7 +16,7 @@
 #     docker compose --profile apps down
 #
 # 운영(v6) 대응: RDS PostgreSQL(인스턴스 1개 · 서비스별 DB 5개) / Amazon MQ for RabbitMQ 4.2 / ElastiCache(세션·토큰)
-# DynamoDB 는 주석 처리 (사용처 없음), Zipkin·Prometheus·Grafana·Fluent Bit 은 후순위 — 목록: docs/backend-infra-rules.md 9번
+# DynamoDB 는 주석 처리 (사용처 없음), 관측성(Prometheus·Grafana·Loki·Tempo)은 AWS 인프라에만 있음 — 목록: docs/backend-infra-rules.md 9번
 # =============================================================================
 
 name: baedalsak-local
@@ -52,8 +52,7 @@ x-app-env: &app-env
   # AWS_SECRET_ACCESS_KEY: local
   AWS_REGION: ap-northeast-2                # SES 등 AWS SDK 리전
   TZ: Asia/Seoul                            # KST
-  # 후순위 (관측성): 분산 추적 → Zipkin (http://localhost:9411)
-  # ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+  # 분산 추적: 로컬은 전송 주소 없음 (traceId 는 로그에만). AWS 는 인프라가 Tempo 주소 주입 (#102)
   # 세션·토큰 Redis (gateway·member가 사용)
   REDIS_SESSION_HOST: redis-session
   REDIS_SESSION_PORT: "6379"                # 컨테이너끼리는 둘 다 6379
@@ -107,12 +106,6 @@ services:
   #   user: root                            # 볼륨 쓰기 권한
   #   volumes:
   #     - ddbdata:/home/dynamodblocal/data
-
-  # ---------- Zipkin — 분산 추적 화면 (N5.2) — 후순위 (관측성), 주석 처리 ----------
-  # 브라우저 http://localhost:9411 → traceId 로 gateway → 서비스 → RabbitMQ 흐름 조회 (메모리 저장, 재시작 시 초기화)
-  # zipkin:
-  #   image: openzipkin/zipkin:3.6.1
-  #   ports: ["9411:9411"]
 
   # ---------- Redis ① 세션·토큰 관리용 (운영: ElastiCache 세션 전용, ALB 단계에서 토큰 관리) ----------
   # 세션은 지워지면 사용자가 로그아웃되므로, 메모리가 차도 키를 지우지 않음(noeviction)
