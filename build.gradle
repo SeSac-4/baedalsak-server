@@ -95,10 +95,9 @@ configure(subprojects.findAll { it.name in serviceModules }) {
         // docs 2번: 모든 서비스 모듈에 필수
         implementation 'org.springframework.boot:spring-boot-starter-actuator'
         // 분산 추적: traceId 를 HTTP·RabbitMQ 헤더로 전파하고 로그에 출력 (docs 6-2)
-        implementation 'org.springframework.boot:spring-boot-micrometer-tracing-brave'
-        implementation 'io.micrometer:micrometer-tracing-bridge-brave'
-        // 후순위 (관측성) — 쓸 때 주석 해제 (docs 9-2)
-        // implementation 'org.springframework.boot:spring-boot-starter-zipkin'   // Zipkin 전송 (위 2줄 대신)
+        //   OpenTelemetry (#102). AWS 는 인프라가 MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT(Tempo) 주입,
+        //   로컬은 주소가 없어 전송하지 않는다. OTLP 지표·로그 전송은 각 서비스 yml 에서 끔
+        implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
         runtimeOnly    'io.micrometer:micrometer-registry-prometheus'          // /actuator/prometheus
 
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
