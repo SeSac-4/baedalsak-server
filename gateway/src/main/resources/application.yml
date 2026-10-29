@@ -32,6 +32,8 @@ spring:
         jwt:
           issuer-uri: ${COGNITO_ISSUER_URI}                          # 토큰 iss 와 같아야 통과
           jwk-set-uri: ${COGNITO_ISSUER_URI}/.well-known/jwks.json  # 공개키 주소
+          authorities-claim-name: "cognito:groups"   # 역할 검사(#23 7단계): Cognito 그룹을 권한으로
+          authority-prefix: "ROLE_"                  # CUSTOMER → ROLE_CUSTOMER (hasRole 이 찾는 이름)
   cloud:
     gateway:
       # Spring Cloud Gateway 4.3+ 설정 경로 (구 spring.cloud.gateway.routes 는 deprecated)

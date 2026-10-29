@@ -38,15 +38,33 @@ public class SecurityConfig {
                 .pathMatchers("/actuator/**").permitAll()
                 // 인증 창구: 가입 3종·로그인·갱신·로그아웃 (설계서 API 명세 '인증 불필요' / 로그아웃 '세션 쿠키')
                 .pathMatchers(HttpMethod.POST, "/api/v*/auth/**").permitAll()
-                // 사장님 내 가게 — 아래 /stores/* 공개 규칙에 걸리지 않게 먼저 둔다 (위에서부터 처음 맞는 규칙 적용)
-                .pathMatchers(HttpMethod.GET, "/api/v*/stores/me").authenticated()
+
+                // ── 사장님 (위에서부터 처음 맞는 규칙 적용 → 공개 규칙 /stores/* 보다 먼저) ──
+                .pathMatchers(HttpMethod.GET, "/api/v*/stores/me", "/api/v*/stores/*/orders").hasRole("OWNER")
+                .pathMatchers(HttpMethod.POST, "/api/v*/stores", "/api/v*/stores/*/menus", "/api/v*/orders/*/accept").hasRole("OWNER")
+                .pathMatchers(HttpMethod.PUT, "/api/v*/stores/**").hasRole("OWNER")     // 가게 수정·영업시간·메뉴 수정
+                .pathMatchers(HttpMethod.PATCH, "/api/v*/stores/**").hasRole("OWNER")   // 운영 상태·품절
+                .pathMatchers(HttpMethod.DELETE, "/api/v*/stores/**").hasRole("OWNER")  // 메뉴 삭제
+
                 // 가게·메뉴 둘러보기 (설계서 API 명세 '인증 불필요')
                 .pathMatchers(HttpMethod.GET,
                     "/api/v*/categories",
                     "/api/v*/stores",
                     "/api/v*/stores/*",
                     "/api/v*/stores/*/menus").permitAll()
-                // 나머지는 로그인 필수 — 토큰 없으면 401
+
+                // ── 고객·사장님 공용: 주문 상세, 주문의 배달 정보 (소유권은 각 서비스가 확인) ──
+                .pathMatchers(HttpMethod.GET, "/api/v*/orders/*", "/api/v*/deliveries/by-order/*").hasAnyRole("CUSTOMER", "OWNER")
+
+                // ── 고객: 장바구니, 주문 생성·내 주문 목록, 결제 ──
+                .pathMatchers("/api/v*/cart/**", "/api/v*/payments/**").hasRole("CUSTOMER")
+                .pathMatchers(HttpMethod.POST, "/api/v*/orders").hasRole("CUSTOMER")
+                .pathMatchers(HttpMethod.GET, "/api/v*/orders").hasRole("CUSTOMER")
+
+                // ── 라이더: 배차 대기·수락·픽업·완료·진행 중 (by-order 는 위에서 먼저 처리됨) ──
+                .pathMatchers("/api/v*/deliveries/**").hasRole("RIDER")
+
+                // 나머지(/members/me 등)는 로그인만 하면 됨 — 토큰 없으면 401
                 .anyExchange().authenticated())
             .build();
     }
