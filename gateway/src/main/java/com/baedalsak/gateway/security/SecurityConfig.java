@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.http.HttpMethod;
 
 /**
  * gateway 보안 설정 (#23).
@@ -33,10 +34,22 @@ public class SecurityConfig {
                 .bearerTokenConverter(new CookieBearerTokenConverter())
                 .jwt(Customizer.withDefaults()))
             .authorizeExchange(exchanges -> exchanges
-                .anyExchange().permitAll())   // 1단계: 전부 통과 (2단계부터 조임)
+                // 운영 상태 확인: AWS 는 8081 별도 포트지만 같은 보안 필터를 지난다 → 막으면 probe 실패로 파드 재시작
+                .pathMatchers("/actuator/**").permitAll()
+                // 인증 창구: 가입 3종·로그인·갱신·로그아웃 (설계서 API 명세 '인증 불필요' / 로그아웃 '세션 쿠키')
+                .pathMatchers(HttpMethod.POST, "/api/v*/auth/**").permitAll()
+                // 사장님 내 가게 — 아래 /stores/* 공개 규칙에 걸리지 않게 먼저 둔다 (위에서부터 처음 맞는 규칙 적용)
+                .pathMatchers(HttpMethod.GET, "/api/v*/stores/me").authenticated()
+                // 가게·메뉴 둘러보기 (설계서 API 명세 '인증 불필요')
+                .pathMatchers(HttpMethod.GET,
+                    "/api/v*/categories",
+                    "/api/v*/stores",
+                    "/api/v*/stores/*",
+                    "/api/v*/stores/*/menus").permitAll()
+                // 나머지는 로그인 필수 — 토큰 없으면 401
+                .anyExchange().authenticated())
             .build();
     }
-
         /**
      * Cognito 는 access·id 토큰을 같은 키로 서명하므로 서명 검사만으로는 구분이 안 된다.
      * token_use 가 "access" 인 토큰만 받는다 (id 토큰으로 API 호출 차단).
