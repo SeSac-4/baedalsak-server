@@ -66,11 +66,19 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info          # 후순위: ,prometheus (docs 9-2)
+        include: health,info,prometheus   # prometheus: 인프라 Prometheus 가 :8081/actuator/prometheus 수집
   endpoint:
     health:
       probes:
         enabled: true                 # /actuator/health/liveness, /readiness 활성화
+  otlp:
+    metrics:
+      export:
+        enabled: false                # 지표는 Prometheus 가 수집 — OTLP 중복 전송 끔
+  logging:
+    export:
+      otlp:
+        enabled: false                # 로그는 stdout → Fluent Bit → Loki — OTLP 중복 전송 끔
   tracing:
     sampling:
       probability: 1.0                # 요청 100% 추적 (트래픽이 많아지면 낮춤)
