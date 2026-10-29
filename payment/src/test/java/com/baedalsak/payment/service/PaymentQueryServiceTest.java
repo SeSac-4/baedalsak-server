@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 /**
- * 결제 내역 조회 (#15). 목록 페이지 응답, 상세(결제 ID·주문 ID) 404·403
+ * 결제 내역 조회 (#15·#93). 목록(승인 완료만 · 승인 시각 최신순) 페이지 응답, 상세(결제 ID·주문 ID) 404·403
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentQueryServiceTest {
@@ -44,24 +44,35 @@ class PaymentQueryServiceTest {
     PaymentQueryService paymentQueryService;
 
     @Test
-    void 내_결제_목록을_최신순_페이지로_돌려준다() {
-        Payment approved = payment(8L, 1006L, 1L, 19500);
-        ReflectionTestUtils.setField(approved, "status", PaymentStatus.APPROVED);
-        ReflectionTestUtils.setField(approved, "approvedAt", APPROVED_AT);
-        Payment requested = payment(7L, 1005L, 1L, 18000);
-        // 최신순, 같으면 id 역순으로 정렬을 넘기는지까지 확인
-        PageRequest latestFirst = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
-        given(paymentRepository.findByCustomerId(1L, latestFirst))
-                .willReturn(new PageImpl<>(List.of(approved, requested), latestFirst, 3));
+    void 내_결제_목록은_승인_완료만_승인_시각_최신순으로_조회한다() {
+        // 승인 완료만, 승인 시각 최신순 · 같으면 id 역순으로 넘기는지 확인 (#93)
+        PageRequest latestApprovedFirst = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "approvedAt", "id"));
+        given(paymentRepository.findByCustomerIdAndStatus(1L, PaymentStatus.APPROVED, latestApprovedFirst))
+                .willReturn(new PageImpl<>(List.of(), latestApprovedFirst, 0));
+
+        PageResponse<PaymentSummaryResponse> response = paymentQueryService.getMyPayments(CUSTOMER, 0, 2);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+    }
+
+    @Test
+    void 내_결제_목록을_페이지로_돌려준다() {
+        // 나중에 요청했지만 먼저 승인된 결제(7)보다 최근에 승인된 결제(8)가 위
+        Payment latest = approved(payment(8L, 1006L, 1L, 19500), APPROVED_AT);
+        Payment earlier = approved(payment(7L, 1005L, 1L, 18000), APPROVED_AT.minusMinutes(10));
+        PageRequest latestApprovedFirst = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "approvedAt", "id"));
+        // 전체 승인 완료 3건 중 첫 페이지 2건
+        given(paymentRepository.findByCustomerIdAndStatus(1L, PaymentStatus.APPROVED, latestApprovedFirst))
+                .willReturn(new PageImpl<>(List.of(latest, earlier), latestApprovedFirst, 3));
 
         PageResponse<PaymentSummaryResponse> response = paymentQueryService.getMyPayments(CUSTOMER, 0, 2);
 
         assertThat(response.content()).extracting(PaymentSummaryResponse::paymentId).containsExactly(8L, 7L);
         assertThat(response.content().get(0)).isEqualTo(
                 new PaymentSummaryResponse(8L, "싹분식", PaymentStatus.APPROVED, 19500, APPROVED_AT));
-        // 결제 요청 상태도 포함, 승인 시각은 없음
-        assertThat(response.content().get(1).status()).isEqualTo(PaymentStatus.REQUESTED);
-        assertThat(response.content().get(1).approvedAt()).isNull();
+        assertThat(response.content()).extracting(PaymentSummaryResponse::status)
+                .containsOnly(PaymentStatus.APPROVED);
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(2);
         assertThat(response.totalElements()).isEqualTo(3);
@@ -123,6 +134,12 @@ class PaymentQueryServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CommonErrorCode.FORBIDDEN);
+    }
+
+    private static Payment approved(Payment payment, OffsetDateTime approvedAt) {
+        ReflectionTestUtils.setField(payment, "status", PaymentStatus.APPROVED);
+        ReflectionTestUtils.setField(payment, "approvedAt", approvedAt);
+        return payment;
     }
 
     private static Payment payment(Long id, Long orderId, Long customerId, int amount) {
