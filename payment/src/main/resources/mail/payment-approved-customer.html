@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <!-- 메일 제목: 렌더러가 아래 title 태그 내용을 꺼내 SES 제목으로 쓴다 -->
+  <title>[배달싹] 결제가 완료되었어요</title>
+</head>
+<!-- 고객 결제완료 메일 (#37). 변수: orderId · storeName · amount · approvedAt (값은 앱이 문자열로 채움)
+     스타일은 태그에 직접(inline) — 메일 앱은 style 태그를 무시하는 경우가 많다 -->
+<body style="margin:0;padding:0;">
+  <div style="margin:0;padding:24px 12px;background:#f6f7f9;">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e5e8eb;border-radius:12px;padding:24px 20px;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#191f28;font-size:15px;line-height:1.6;">
+
+      <div style="font-weight:800;color:#2f6fed;margin:0 0 12px;">배달싹</div>
+      <h1 style="margin:0 0 8px;font-size:20px;">결제가 완료되었어요</h1>
+      <p style="margin:0 0 16px;">{{storeName}}에서 주문을 확인하면 조리가 시작돼요.</p>
+
+      <table role="presentation" style="width:100%;border:1px solid #e5e8eb;border-radius:10px;border-collapse:separate;padding:10px 14px;margin:0 0 16px;font-size:14px;">
+        <tr>
+          <td style="padding:4px 12px 4px 0;color:#6b7684;white-space:nowrap;">주문번호</td>
+          <td style="padding:4px 0;">{{orderId}}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 12px 4px 0;color:#6b7684;white-space:nowrap;">가게</td>
+          <td style="padding:4px 0;">{{storeName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 12px 4px 0;color:#6b7684;white-space:nowrap;">결제 금액</td>
+          <td style="padding:4px 0;">{{amount}}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 12px 4px 0;color:#6b7684;white-space:nowrap;">승인 시각</td>
+          <td style="padding:4px 0;">{{approvedAt}}</td>
+        </tr>
+      </table>
+
+      <p style="margin:0 0 16px;">주문 상세는 배달싹 앱의 주문 내역에서 확인할 수 있어요.</p>
+      <p style="margin:16px 0 0;padding-top:12px;border-top:1px solid #e5e8eb;color:#6b7684;font-size:12px;">이 메일은 발신 전용입니다.</p>
+
+    </div>
+  </div>
+</body>
+</html>

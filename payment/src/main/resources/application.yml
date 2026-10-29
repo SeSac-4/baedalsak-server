@@ -53,15 +53,17 @@ spring:
       observation-enabled: true             # 발행 시 traceId 를 메시지 헤더에 실음
     listener:
       simple:
-        # ## 미리 받아 두는 메시지 수 (부하 테스트 때 조정)
-        #   1건 처리가 느릴수록(DB 트랜잭션) 작게, 빠를수록 크게. 파드가 죽으면 이만큼 재전달됨
-        prefetch: 10
+        # payment 의 리스너는 메일 리스너뿐 → 메일 리스너 규칙 (docs 10-4, 설계서 '이벤트 목록' 메일 리스너)
+        acknowledge-mode: auto              # 메서드가 정상 종료돼야 ack (SES 동기 발송이 끝난 뒤)
+        concurrency: 1                      # 메일은 한 건씩 순서대로
+        max-concurrency: 1
+        prefetch: 1                         # 파드가 죽어도 재전달은 1건
         observation-enabled: true           # 소비 시 헤더의 traceId 를 이어받음
         default-requeue-rejected: false     # 실패 메시지를 큐에 되돌리지 않음 → DLQ (무한 재처리 방지)
         retry:                              # 앱 안에서 재시도 후 포기 → DLQ
           enabled: true
-          max-attempts: 3                   # 최초 1회 + 재시도 2회
-          initial-interval: 1s
+          max-retries: 2                    # 최대 3회 시도 = 최초 1회 + 재시도 2회 (Boot 4 속성 이름)
+          initial-interval: 2s
           multiplier: 2
           max-interval: 10s
 
@@ -106,6 +108,16 @@ internal-api:
   # 응답이 없으면 무한정 기다리지 않고 503 DEPENDENCY_UNAVAILABLE 로 끊는다
   connect-timeout: 1s
   read-timeout: 2s
+
+# 결제완료 메일 (#37, docs 10번). PaymentApproved 를 자기 메일 큐로 받아 SES 로 동기 발송
+#   템플릿은 resources/mail/{이름}.html — 앱이 {{변수}} 를 채우고 <title> 을 메일 제목으로 씀 (SES 는 발송만)
+#   local 프로필은 발송 대신 렌더링 결과를 로그로 (docs 10-4). 자격 증명은 두지 않음 — AWS 는 Pod Identity
+payment-mail:
+  region: ${AWS_REGION:ap-northeast-2}            # SES 리전 (docs 3번 AWS_REGION, 파드에 없으면 기본값)
+  from: no-reply@baedalsak.click                  # 팀 공통 발신 주소 (인증 도메인 baedalsak.click) — 확정 전 임시값
+  templates:
+    customer: payment-approved-customer           # 고객 결제완료 메일
+    owner: payment-approved-owner                 # 사장님 새 주문 메일
 
 # 토스페이먼츠 결제 승인 (설계서 '동기 호출' 탭, N1.4: 5초 타임아웃, 재시도 없음)
 toss:
