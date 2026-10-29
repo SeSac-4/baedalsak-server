@@ -10,6 +10,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 
 /**
  * gateway 보안 설정 (#23).
@@ -25,6 +26,8 @@ public class SecurityConfig {
         return http
             // 쿠키 기반이지만 CSRF 는 X-Requested-With 검사로 직접 한다 (8단계)
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            //커스텀 헤더 존재 검사
+            .addFilterAfter(new RequestedWithHeaderFilter(), SecurityWebFiltersOrder.CSRF)
             // 로그인 화면·Basic 인증·/logout 은 member 가 담당 → Security 기본 기능 끔
             .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
             .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
