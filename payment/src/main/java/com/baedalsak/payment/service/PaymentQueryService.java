@@ -12,6 +12,7 @@ import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.payment.domain.Payment;
+import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.response.PageResponse;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.dto.response.PaymentSummaryResponse;
@@ -21,7 +22,8 @@ import com.baedalsak.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 결제 내역 조회 (#15, 설계서 'API 명세' 5.4.1·5.4.2). 자기 DB 만으로 응답하고 다른 서비스를 호출하지 않는다.
+ * 결제 내역 조회 (#15·#93, 설계서 'API 명세' 5.4.1·5.4.2). 자기 DB 만으로 응답하고 다른 서비스를 호출하지 않는다.
+ * 목록은 승인 완료만, 상세(결제 ID·주문 ID)는 결제 요청 상태도 조회한다.
  * 상세는 결제 ID(U-10·U-06 → U-11)와 주문 ID(U-09 주문 상세 → U-11) 두 경로로 찾는다.
  */
 @Service
@@ -29,15 +31,15 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class PaymentQueryService {
 
-  // 최신순, 생성 시각이 같으면 id 역순
-  private static final Sort LATEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+  // 승인 시각 최신순, 같으면 id 역순 (#93)
+  private static final Sort LATEST_APPROVED_FIRST = Sort.by(Sort.Direction.DESC, "approvedAt", "id");
 
   private final PaymentRepository paymentRepository;
 
-  // 내 결제 목록 최신순 (결제 요청 상태 포함)
+  // 내 결제 목록 (#93): 실제로 결제된 승인 완료만, 최근 결제가 위로. 결제창만 열고 닫은 결제 요청은 제외
   public PageResponse<PaymentSummaryResponse> getMyPayments(LoginMember member, int page, int size) {
-    Page<Payment> payments = paymentRepository.findByCustomerId(member.id(),
-        PageRequest.of(page, size, LATEST_FIRST));
+    Page<Payment> payments = paymentRepository.findByCustomerIdAndStatus(member.id(), PaymentStatus.APPROVED,
+        PageRequest.of(page, size, LATEST_APPROVED_FIRST));
     return PageResponse.of(payments, payments.map(PaymentSummaryResponse::from).getContent());
   }
 
