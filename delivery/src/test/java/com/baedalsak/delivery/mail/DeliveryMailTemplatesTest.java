@@ -34,4 +34,16 @@ class DeliveryMailTemplatesTest {
         assertThat(mail.subject()).isEqualTo("[배달싹] 배달이 시작되었어요");
         assertThat(mail.html()).contains("1005", "2026-10-27 15:50").doesNotContain("{{");
     }
+
+    @Test
+    void 배달완료_템플릿() {
+        Map<String, String> data = Map.of("orderId", "1005", "completedAt", "2026-10-27 16:10");
+
+        for (String template : new String[]{"delivery-completed-customer", "delivery-completed-owner"}) {
+            RenderedMail mail = renderer.render(template, data);
+
+            assertThat(mail.subject()).isEqualTo("[배달싹] 배달이 완료되었어요");
+            assertThat(mail.html()).contains("1005", "2026-10-27 16:10").doesNotContain("{{");
+        }
+    }
 }

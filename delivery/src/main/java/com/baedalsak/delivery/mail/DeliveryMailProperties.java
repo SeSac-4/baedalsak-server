@@ -12,6 +12,12 @@ public record DeliveryMailProperties(
         Templates templates
 ) {
 
-    public record Templates(String assignedCustomer, String assignedOwner, String pickedUpCustomer) {
+    public record Templates(
+            String assignedCustomer,
+            String assignedOwner,
+            String pickedUpCustomer,
+            String completedCustomer,
+            String completedOwner
+    ) {
     }
 }

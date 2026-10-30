@@ -94,3 +94,5 @@ delivery-mail:
     assigned-customer: delivery-assigned-customer   # 고객 배차완료 메일
     assigned-owner: delivery-assigned-owner         # 사장님 배차완료 메일
     picked-up-customer: delivery-picked-up-customer # 고객 배달시작 메일
+    completed-customer: delivery-completed-customer # 고객 배달완료 메일
+    completed-owner: delivery-completed-owner       # 사장님 배달완료 메일
