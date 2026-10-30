@@ -58,6 +58,14 @@ class MailDispatcherTest {
     }
 
     @Test
+    void 수신자_이메일이_없으면_선점도_발송도_하지_않는다() {
+        mailDispatcher.send(EVENT_ID, null, "template", DATA);
+        mailDispatcher.send(EVENT_ID, " ", "template", DATA);
+
+        verifyNoInteractions(mailLogWriter, mailSender);
+    }
+
+    @Test
     void 영구_오류면_재시도_없이_거부하고_SENT_로_기록하지_않는다() {
         given(mailLogWriter.claim(EVENT_ID, RECIPIENT)).willReturn(true);
         willThrow(new PermanentMailFailureException("rejected", new RuntimeException()))

@@ -27,6 +27,11 @@ public class MailDispatcher {
     private final MailSender mailSender;
 
     public void send(UUID eventId, String recipient, String templateName, Map<String, String> data) {
+        // 이메일 스냅샷이 없는 배달(V2 이전 행, POST /v1/deliveries 이메일 생략)은 재시도해도 소용없고 다른 수신자까지 막으므로 건너뜀
+        if (recipient == null || recipient.isBlank()) {
+            log.warn("수신자 이메일 없음, 메일 건너뜀 eventId={}, template={}", eventId, templateName);
+            return;
+        }
         if (!mailLogWriter.claim(eventId, recipient)) {
             log.info("이미 보낸 메일 건너뜀 eventId={}, template={}", eventId, templateName);
             return;
