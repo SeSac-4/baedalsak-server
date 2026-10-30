@@ -34,7 +34,7 @@ x-app: &app
 
 x-app-env: &app-env
   SPRING_PROFILES_ACTIVE: local
-  SERVER_PORT: "8080"                       # 컨테이너 안에서는 모두 8080
+  SERVER_PORT: "8080" # 컨테이너 안에서는 모두 8080
   DB_HOST: postgres
   DB_PORT: "5432"
   DB_PASSWORD: ${DB_PASSWORD:?.env 파일을 만들어 주세요}
@@ -42,20 +42,20 @@ x-app-env: &app-env
   RABBITMQ_PORT: "5672"
   RABBITMQ_USER: ${RABBITMQ_USER:?.env 파일을 만들어 주세요}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?.env 파일을 만들어 주세요}
-  RABBITMQ_VHOST: /                         # 운영 Amazon MQ: /prod · /dev
-  RABBITMQ_SSL_ENABLED: "false"             # 운영 Amazon MQ: true (AMQPS 5671)
+  RABBITMQ_VHOST: / # 운영 Amazon MQ: /prod · /dev
+  RABBITMQ_SSL_ENABLED: "false" # 운영 Amazon MQ: true (AMQPS 5671)
   # 개발용 seed 계정 (db/seed/R__<서비스>_seed.sql, #73). 운영에는 두지 않음
   SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
   # DynamoDB 주석 처리
   # DYNAMODB_ENDPOINT: http://dynamodb:8000
   # AWS_ACCESS_KEY_ID: local                # DynamoDB Local은 아무 값이나 받음
   # AWS_SECRET_ACCESS_KEY: local
-  AWS_REGION: ap-northeast-2                # SES 등 AWS SDK 리전
-  TZ: Asia/Seoul                            # KST
+  AWS_REGION: ap-northeast-2 # SES 등 AWS SDK 리전
+  TZ: Asia/Seoul # KST
   # 분산 추적: 로컬은 전송 주소 없음 (traceId 는 로그에만). AWS 는 인프라가 Tempo 주소 주입 (#102)
   # 세션·토큰 Redis (gateway·member가 사용)
   REDIS_SESSION_HOST: redis-session
-  REDIS_SESSION_PORT: "6379"                # 컨테이너끼리는 둘 다 6379
+  REDIS_SESSION_PORT: "6379" # 컨테이너끼리는 둘 다 6379
   REDIS_SESSION_PASSWORD: ${REDIS_SESSION_PASSWORD:?.env 파일을 만들어 주세요}
   # DB 캐시용 Redis — 보류 (도입 시 주석 해제)
   # REDIS_CACHE_HOST: redis-cache
@@ -65,10 +65,10 @@ x-app-env: &app-env
 services:
   # =========================== 의존성 ===========================
   postgres:
-    image: postgres:16-alpine               # RDS 엔진 메이저 버전과 맞출 것
+    image: postgres:16-alpine # RDS 엔진 메이저 버전과 맞출 것
     ports: ["5432:5432"]
     environment:
-      POSTGRES_DB: ${DB_NAME:-baedalsak}    # 관리자 기본 DB. 서비스 DB 5개는 초기화 스크립트가 생성
+      POSTGRES_DB: ${DB_NAME:-baedalsak} # 관리자 기본 DB. 서비스 DB 5개는 초기화 스크립트가 생성
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:?.env 파일을 만들어 주세요}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?.env 파일을 만들어 주세요}
       SERVICE_DB_PASSWORD: ${DB_PASSWORD:?.env 파일을 만들어 주세요}
@@ -83,10 +83,10 @@ services:
       retries: 20
 
   rabbitmq:
-    image: rabbitmq:4.2-management          # 운영 Amazon MQ for RabbitMQ 의 권장 엔진 버전(4.2)과 맞춤
+    image: rabbitmq:4.2-management # 운영 Amazon MQ for RabbitMQ 의 권장 엔진 버전(4.2)과 맞춤
     ports:
       - "5672:5672"
-      - "15672:15672"                       # 관리 화면 http://localhost:15672
+      - "15672:15672" # 관리 화면 http://localhost:15672
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?.env 파일을 만들어 주세요}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?.env 파일을 만들어 주세요}
@@ -110,10 +110,10 @@ services:
   # ---------- Redis ① 세션·토큰 관리용 (운영: ElastiCache 세션 전용, ALB 단계에서 토큰 관리) ----------
   # 세션은 지워지면 사용자가 로그아웃되므로, 메모리가 차도 키를 지우지 않음(noeviction)
   redis-session:
-    image: redis:7-alpine                   # ElastiCache 엔진 버전과 맞출 것
-    ports: ["6379:6379"]                    # 로컬 PC에서 접속할 때만 포트 구분 필요
+    image: redis:7-alpine # ElastiCache 엔진 버전과 맞출 것
+    ports: ["6379:6379"] # 로컬 PC에서 접속할 때만 포트 구분 필요
     environment:
-      REDISCLI_AUTH: ${REDIS_SESSION_PASSWORD:?.env 파일을 만들어 주세요}   # healthcheck용
+      REDISCLI_AUTH: ${REDIS_SESSION_PASSWORD:?.env 파일을 만들어 주세요} # healthcheck용
     command:
       - redis-server
       - --requirepass
@@ -164,8 +164,9 @@ services:
       ORDER_SERVICE_URL: http://order:8080
       PAYMENT_SERVICE_URL: http://payment:8080
       DELIVERY_SERVICE_URL: http://delivery:8080
-      MEMBER_SERVICE_URL: http://member:8080
-            # 토큰 검증용 Cognito 발급자 (#23). AWS 는 인프라 deploy.sh 가 주입
+      MEMBER_SERVICE_URL:
+        http://member:8080
+        # 토큰 검증용 Cognito 발급자 (#23). AWS 는 인프라 deploy.sh 가 주입
       COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:?.env 파일에 COGNITO_ISSUER_URI 를 추가해 주세요}
 
   # 메뉴·가게
@@ -174,7 +175,8 @@ services:
     build: { context: ., args: { MODULE: "${STORE_MODULE:-store}" } }
     image: baedalsak/store:local
     ports: ["8081:8080"]
-    environment: { <<: *app-env, DB_NAME: store, DB_USER: store_svc, DB_SCHEMA: store }
+    environment:
+      { <<: *app-env, DB_NAME: store, DB_USER: store_svc, DB_SCHEMA: store }
 
   # 주문·장바구니
   order:
@@ -202,7 +204,8 @@ services:
       DB_NAME: payment
       DB_USER: payment_svc
       DB_SCHEMA: payment
-      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:?.env 파일에 TOSS_SECRET_KEY 를 추가해 주세요}   # 토스 결제 승인
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:?.env 파일에 TOSS_SECRET_KEY 를 추가해 주세요} # 토스 결제 승인
+      ORDER_SERVICE_URL: http://order:8080
 
   # 배달
   delivery:
@@ -215,7 +218,7 @@ services:
       DB_NAME: delivery
       DB_USER: delivery_svc
       DB_SCHEMA: delivery
-      MEMBER_SERVICE_URL: http://member:8080   # [내부] 배차 수락 시 라이더 이름
+      MEMBER_SERVICE_URL: http://member:8080 # [내부] 배차 수락 시 라이더 이름
 
   # 인증·인가
   member:
