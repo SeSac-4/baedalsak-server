@@ -19,6 +19,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DeliveryAssignedMailListener {
 
+    // member 호출이 실패해도 배차는 성공해 riderName 이 null 로 온다 (설계서 '동기 호출' 탭) → "담당 라이더님" 으로 보낸다
+    private static final String UNKNOWN_RIDER_NAME = "담당";
+
     private final MailDispatcher mailDispatcher;
     private final DeliveryMailProperties properties;
 
@@ -28,7 +31,7 @@ public class DeliveryAssignedMailListener {
         UUID eventId = MailDispatcher.parseEventId(DeliveryAssignedEvent.TYPE, messageId);
         Map<String, String> data = Map.of(
                 "orderId", String.valueOf(event.orderId()),
-                "riderName", event.riderName(),
+                "riderName", event.riderName() != null ? event.riderName() : UNKNOWN_RIDER_NAME,
                 "assignedAt", MailDispatcher.formatKst(event.assignedAt()));
         mailDispatcher.send(eventId, event.customerEmail(), properties.templates().assignedCustomer(), data);
         mailDispatcher.send(eventId, event.ownerEmail(), properties.templates().assignedOwner(), data);

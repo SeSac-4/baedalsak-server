@@ -45,6 +45,18 @@ class DeliveryAssignedMailListenerTest {
     }
 
     @Test
+    void 라이더_이름을_못_가져온_배차도_메일을_보낸다() {
+        DeliveryAssignedEvent event = new DeliveryAssignedEvent(7L, 31L, 1L, 2L, 3L, null,
+                OffsetDateTime.parse("2026-10-27T06:30:00Z"), "customer@example.com", "owner@example.com");
+
+        listener.onDeliveryAssigned(event, EVENT_ID);
+
+        Map<String, String> data = Map.of("orderId", "31", "riderName", "담당", "assignedAt", "2026-10-27 15:30");
+        verify(mailDispatcher).send(EVENT_UUID, "customer@example.com", "assigned-customer-template", data);
+        verify(mailDispatcher).send(EVENT_UUID, "owner@example.com", "assigned-owner-template", data);
+    }
+
+    @Test
     void messageId_가_없으면_거부한다() {
         assertThatThrownBy(() -> listener.onDeliveryAssigned(event(), null))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
