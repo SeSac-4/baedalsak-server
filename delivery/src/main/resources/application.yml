@@ -90,3 +90,6 @@ management:
 delivery-mail:
   region: ${AWS_REGION:ap-northeast-2}            # SES 리전 (docs 3번 AWS_REGION, 파드에 없으면 기본값)
   from: no-reply@baedalsak.click                  # 팀 공통 발신 주소 (payment 와 같은 값) — 확정 전 임시값
+  templates:
+    assigned-customer: delivery-assigned-customer   # 고객 배차완료 메일
+    assigned-owner: delivery-assigned-owner         # 사장님 배차완료 메일

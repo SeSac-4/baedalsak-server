@@ -8,6 +8,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("delivery-mail")
 public record DeliveryMailProperties(
         String region,
-        String from
+        String from,
+        Templates templates
 ) {
+
+    public record Templates(String assignedCustomer, String assignedOwner) {
+    }
 }

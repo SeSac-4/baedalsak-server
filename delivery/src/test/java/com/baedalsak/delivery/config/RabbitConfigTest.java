@@ -2,6 +2,7 @@ package com.baedalsak.delivery.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
@@ -24,6 +25,11 @@ import static org.mockito.Mockito.mock;
 class RabbitConfigTest {
 
     final RabbitConfig rabbitConfig = new RabbitConfig();
+
+    @Test
+    void 배차완료_메일_큐는_quorum_이고_delivery_dlx_로_보낸다() {
+        assertMailQueue(rabbitConfig.deliveryAssignedMailQueues(), "delivery.mail.delivery-assigned", "delivery.assigned");
+    }
 
     @Test
     void 메일_리스너는_동시성_1_prefetch_1_이고_업무_큐와_다른_재시도를_쓴다() {
@@ -57,6 +63,27 @@ class RabbitConfigTest {
     @Test
     void 그_외_예외는_재시도한다() {
         assertThat(RabbitConfig.isRetryable(new IllegalStateException("throttled"))).isTrue();
+    }
+
+    private static void assertMailQueue(Declarables declarables, String queueName, String routingKey) {
+        assertThat(queue(declarables, queueName).getArguments())
+                .containsEntry("x-queue-type", "quorum")
+                .containsEntry("x-delivery-limit", 3)
+                .containsEntry("x-dead-letter-exchange", "delivery.dlx")
+                .containsEntry("x-dead-letter-routing-key", queueName);
+        assertThat(queue(declarables, queueName + ".dlq").getArguments())
+                .containsEntry("x-queue-type", "quorum");
+        assertThat(declarables.getDeclarablesByType(Binding.class))
+                .anySatisfy(b -> {
+                    assertThat(b.getExchange()).isEqualTo("baedalsak.events");
+                    assertThat(b.getRoutingKey()).isEqualTo(routingKey);
+                    assertThat(b.getDestination()).isEqualTo(queueName);
+                })
+                .anySatisfy(b -> {
+                    assertThat(b.getExchange()).isEqualTo("delivery.dlx");
+                    assertThat(b.getRoutingKey()).isEqualTo(queueName);
+                    assertThat(b.getDestination()).isEqualTo(queueName + ".dlq");
+                });
     }
 
     static Queue queue(Declarables declarables, String name) {

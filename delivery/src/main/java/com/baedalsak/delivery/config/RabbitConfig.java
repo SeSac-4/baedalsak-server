@@ -1,5 +1,6 @@
 package com.baedalsak.delivery.config;
 
+import com.baedalsak.delivery.payload.DeliveryAssignedEvent;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.BindingBuilder;
@@ -36,6 +37,8 @@ public class RabbitConfig {
     public static final String ORDER_ACCEPTED_QUEUE = "delivery.order-accepted";
     public static final String ORDER_ACCEPTED_ROUTING_KEY = "order.accepted";
 
+    public static final String DELIVERY_ASSIGNED_MAIL_QUEUE = "delivery.mail.delivery-assigned";
+
     // 메일 리스너 전용 컨테이너 팩토리. 업무 리스너(OrderAccepted)는 Boot 기본 팩토리(prefetch 10)를 그대로 쓴다
     public static final String MAIL_LISTENER_FACTORY = "mailListenerContainerFactory";
 
@@ -53,6 +56,27 @@ public class RabbitConfig {
         return new Declarables(events, deadLetterExchange, main, dlq,
                 BindingBuilder.bind(main).to(events).with(ORDER_ACCEPTED_ROUTING_KEY),
                 BindingBuilder.bind(dlq).to(deadLetterExchange).with(ORDER_ACCEPTED_QUEUE));
+    }
+
+    @Bean
+    Declarables deliveryAssignedMailQueues() {
+        return mailQueues(DELIVERY_ASSIGNED_MAIL_QUEUE, DeliveryAssignedEvent.ROUTING_KEY);
+    }
+
+    // 메일 큐 + DLQ (둘 다 quorum). 재전달은 deliveryLimit 3 까지, 포기한 메시지는 delivery.dlx → <큐>.dlq. DLQ 에는 리스너를 붙이지 않는다
+    private static Declarables mailQueues(String queueName, String routingKey) {
+        TopicExchange events = new TopicExchange(EVENTS_EXCHANGE);
+        DirectExchange deadLetterExchange = new DirectExchange(DEAD_LETTER_EXCHANGE);
+        Queue main = QueueBuilder.durable(queueName)
+                .quorum()
+                .deliveryLimit(3)
+                .deadLetterExchange(DEAD_LETTER_EXCHANGE)
+                .deadLetterRoutingKey(queueName)
+                .build();
+        Queue dlq = QueueBuilder.durable(queueName + ".dlq").quorum().build();
+        return new Declarables(main, dlq,
+                BindingBuilder.bind(main).to(events).with(routingKey),
+                BindingBuilder.bind(dlq).to(deadLetterExchange).with(queueName));
     }
 
     /**
