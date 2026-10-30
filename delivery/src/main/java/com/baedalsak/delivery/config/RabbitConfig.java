@@ -1,6 +1,7 @@
 package com.baedalsak.delivery.config;
 
 import com.baedalsak.delivery.payload.DeliveryAssignedEvent;
+import com.baedalsak.delivery.payload.DeliveryPickedUpEvent;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.BindingBuilder;
@@ -38,6 +39,7 @@ public class RabbitConfig {
     public static final String ORDER_ACCEPTED_ROUTING_KEY = "order.accepted";
 
     public static final String DELIVERY_ASSIGNED_MAIL_QUEUE = "delivery.mail.delivery-assigned";
+    public static final String DELIVERY_PICKED_UP_MAIL_QUEUE = "delivery.mail.delivery-picked-up";
 
     // 메일 리스너 전용 컨테이너 팩토리. 업무 리스너(OrderAccepted)는 Boot 기본 팩토리(prefetch 10)를 그대로 쓴다
     public static final String MAIL_LISTENER_FACTORY = "mailListenerContainerFactory";
@@ -61,6 +63,11 @@ public class RabbitConfig {
     @Bean
     Declarables deliveryAssignedMailQueues() {
         return mailQueues(DELIVERY_ASSIGNED_MAIL_QUEUE, DeliveryAssignedEvent.ROUTING_KEY);
+    }
+
+    @Bean
+    Declarables deliveryPickedUpMailQueues() {
+        return mailQueues(DELIVERY_PICKED_UP_MAIL_QUEUE, DeliveryPickedUpEvent.ROUTING_KEY);
     }
 
     // 메일 큐 + DLQ (둘 다 quorum). 재전달은 deliveryLimit 3 까지, 포기한 메시지는 delivery.dlx → <큐>.dlq. DLQ 에는 리스너를 붙이지 않는다

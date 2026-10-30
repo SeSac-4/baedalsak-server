@@ -8,6 +8,7 @@ final class TestMailProperties {
 
     static DeliveryMailProperties properties() {
         return new DeliveryMailProperties("ap-northeast-2", "no-reply@baedalsak.click",
-                new DeliveryMailProperties.Templates("assigned-customer-template", "assigned-owner-template"));
+                new DeliveryMailProperties.Templates("assigned-customer-template", "assigned-owner-template",
+                        "picked-up-customer-template"));
     }
 }

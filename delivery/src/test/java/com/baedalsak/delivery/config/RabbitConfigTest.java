@@ -32,6 +32,11 @@ class RabbitConfigTest {
     }
 
     @Test
+    void 배달시작_메일_큐는_quorum_이고_delivery_dlx_로_보낸다() {
+        assertMailQueue(rabbitConfig.deliveryPickedUpMailQueues(), "delivery.mail.delivery-picked-up", "delivery.picked_up");
+    }
+
+    @Test
     void 메일_리스너는_동시성_1_prefetch_1_이고_업무_큐와_다른_재시도를_쓴다() {
         SimpleRabbitListenerContainerFactory factory = rabbitConfig.mailListenerContainerFactory(
                 new SimpleRabbitListenerContainerFactoryConfigurer(new RabbitProperties()), mock(ConnectionFactory.class));
