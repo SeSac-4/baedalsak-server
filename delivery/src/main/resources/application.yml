@@ -82,3 +82,17 @@ management:
     export:
       otlp:
         enabled: false                       # 로그는 Loki 가 수집 — OTLP 중복 전송 끔
+
+# 배달 메일 (#108, docs 10번). delivery 가 발행한 DeliveryAssigned·PickedUp·Completed 를 자기 메일 큐로 받아 SES 로 동기 발송
+#   리스너 규칙(동시성 1 · prefetch 1 · 2초 ×2 재시도)은 RabbitConfig 의 mailListenerContainerFactory 에 있다
+#   템플릿은 resources/mail/{이름}.html — 앱이 {{변수}} 를 채우고 <title> 을 메일 제목으로 씀 (SES 는 발송만)
+#   local 프로필은 발송 대신 렌더링 결과를 로그로 (docs 10-4). 자격 증명은 두지 않음 — AWS 는 Pod Identity
+delivery-mail:
+  region: ${AWS_REGION:ap-northeast-2}            # SES 리전 (docs 3번 AWS_REGION, 파드에 없으면 기본값)
+  from: no-reply@baedalsak.click                  # 팀 공통 발신 주소 (payment 와 같은 값) — 확정 전 임시값
+  templates:
+    assigned-customer: delivery-assigned-customer   # 고객 배차완료 메일
+    assigned-owner: delivery-assigned-owner         # 사장님 배차완료 메일
+    picked-up-customer: delivery-picked-up-customer # 고객 배달시작 메일
+    completed-customer: delivery-completed-customer # 고객 배달완료 메일
+    completed-owner: delivery-completed-owner       # 사장님 배달완료 메일
