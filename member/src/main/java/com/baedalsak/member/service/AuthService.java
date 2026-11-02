@@ -1,5 +1,6 @@
 package com.baedalsak.member.service;
 
+import com.baedalsak.member.auth.TokenBlacklistStore;
 import java.time.Duration;
 
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AuthService {
 
+  private final TokenBlacklistStore tokenBlacklistStore;
   private final CognitoAuthClient cognitoAuthClient;
   private final RefreshSessionStore refreshSessionStore;
   private final MemberRepository memberRepository;
@@ -74,12 +76,17 @@ public class AuthService {
     }
   }
 
-    /**
+   /**
    * 로그아웃 (API 명세 8.2.2) — 무슨 일이 있어도 성공. 예외를 밖으로 던지지 않는다.
    * 세션 ID 쿠키만 있으면 동작 (access 토큰이 만료됐어도 됨).
-   * access 토큰 jti 블랙리스트 등록은 gateway 인증(#23)·블랙리스트(#41) 때 추가.
+   * tokenId·expiresAt 은 AT 가 유효할 때만 gateway 가 넘긴다 (#111). 없으면 블랙리스트 등록 생략.
    */
-  public void logout(String sessionId) {
+  public void logout(String sessionId, String tokenId, Long expiresAt) {
+    // ① 쓰던 AT 를 바로 막는다. 세션 쿠키가 없어도 AT 가 유효하면 등록
+    if (tokenId != null && expiresAt != null) {
+      tokenBlacklistStore.add(tokenId, expiresAt);
+    }
+
     if (sessionId == null || sessionId.isBlank()) {
       return;   // 이미 로그아웃 상태 — 쿠키 삭제만 하면 됨
     }
