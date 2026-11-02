@@ -1,5 +1,6 @@
 package com.baedalsak.store.dto.response;
 
+import com.baedalsak.store.config.ImageProperties;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.domain.OperationStatus;
@@ -21,14 +22,18 @@ public record StoreDetailResponse(
         OperationStatus operationStatus,
         boolean isOpenNow,
         BusinessHourResponse todayHour,
-        List<BusinessHourResponse> businessHours
+        List<BusinessHourResponse> businessHours,
+        String imageKey,
+        String imageUrl
 ) {
 
     /**
      * @param hours 가게의 7개 요일 영업시간 (요일 순)
-     * @param now   한국 시각 기준 현재 시각
+     * @param now    한국 시각 기준 현재 시각
+     * @param images 사진 URL 을 만들 CDN 설정
      */
-    public static StoreDetailResponse of(Store store, List<BusinessHour> hours, LocalDateTime now) {
+    public static StoreDetailResponse of(Store store, List<BusinessHour> hours, LocalDateTime now,
+                                         ImageProperties images) {
         short today = BusinessHour.toDbValue(now.getDayOfWeek());
         BusinessHour todayHour = hours.stream()
                 .filter(h -> h.getDayOfWeek() == today)
@@ -44,7 +49,9 @@ public record StoreDetailResponse(
                 store.getOperationStatus(),
                 store.isOpenAt(todayHour, now.toLocalTime()),
                 BusinessHourResponse.from(todayHour),
-                hours.stream().map(BusinessHourResponse::from).toList()
+                hours.stream().map(BusinessHourResponse::from).toList(),
+                store.getImageKey(),
+                images.urlOf(store.getImageKey())
         );
     }
 }

@@ -46,6 +46,9 @@ public class Menu {
     @Column(nullable = false, length = 10)
     private SaleStatus saleStatus;
 
+    // 사진 S3 키 (stores/{storeId}/…). null 이면 사진 없음
+    private String imageKey;
+
     private OffsetDateTime deletedAt;
 
     @Column(nullable = false, updatable = false)
@@ -54,22 +57,24 @@ public class Menu {
     @Column(nullable = false)
     private OffsetDateTime updatedAt;
 
-    private Menu(Long storeId, String name, String description, Integer price) {
+    private Menu(Long storeId, String name, String description, Integer price, String imageKey) {
         this.storeId = storeId;
         this.name = name;
         this.description = description;
         this.price = price;
+        this.imageKey = imageKey;
         this.saleStatus = SaleStatus.ON_SALE;
     }
 
-    public static Menu create(Long storeId, String name, String description, Integer price) {
-        return new Menu(storeId, name, description, price);
+    public static Menu create(Long storeId, String name, String description, Integer price, String imageKey) {
+        return new Menu(storeId, name, description, price, imageKey);
     }
 
-    public void update(String name, String description, Integer price) {
+    public void update(String name, String description, Integer price, String imageKey) {
         this.name = name;
         this.description = description;
         this.price = price;
+        this.imageKey = imageKey;
     }
 
     public void changeSaleStatus(SaleStatus saleStatus) {

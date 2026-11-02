@@ -2,6 +2,7 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.store.config.ImageProperties;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.request.BusinessHoursRequest;
@@ -35,9 +36,12 @@ public class StoreManageService {
     private final StoreRepository storeRepository;
     private final BusinessHourRepository businessHourRepository;
     private final StoreOwnership storeOwnership;
+    private final ImageService imageService;
+    private final ImageProperties imageProperties;
     private final Clock clock;
 
-    // 영업시간 7행(09:00~22:00)을 함께 만들고, 운영 상태는 임시 중지로 시작한다
+    // 영업시간 7행(09:00~22:00)을 함께 만들고, 운영 상태는 임시 중지로 시작한다.
+    // 사진(imageKey)은 받지 않는다 — 가게 id 가 생기기 전이라 업로드 URL 을 받을 수 없음
     @Transactional
     public StoreDetailResponse create(LoginMember member, StoreUpsertRequest request) {
         storeOwnership.requireOwner(member);
@@ -62,8 +66,9 @@ public class StoreManageService {
     @Transactional
     public StoreDetailResponse update(LoginMember member, Long storeId, StoreUpsertRequest request) {
         Store store = storeOwnership.getOwnedStore(member, storeId);
+        imageService.requireOwnKey(storeId, request.imageKey());
         store.update(request.name(), request.category(), request.address(),
-                request.minOrderAmount(), request.deliveryFee());
+                request.minOrderAmount(), request.deliveryFee(), request.imageKey());
         return toDetail(store);
     }
 
@@ -89,6 +94,6 @@ public class StoreManageService {
 
     private StoreDetailResponse toDetail(Store store) {
         List<BusinessHour> hours = businessHourRepository.findAllByStoreIdOrderByDayOfWeek(store.getId());
-        return StoreDetailResponse.of(store, hours, LocalDateTime.now(clock));
+        return StoreDetailResponse.of(store, hours, LocalDateTime.now(clock), imageProperties);
     }
 }

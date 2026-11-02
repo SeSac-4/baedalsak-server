@@ -55,6 +55,9 @@ public class Store {
     @Column(nullable = false, length = 10)
     private OperationStatus operationStatus;
 
+    // 사진 S3 키 (stores/{id}/…). null 이면 사진 없음
+    private String imageKey;
+
     @Column(nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -77,12 +80,14 @@ public class Store {
         return new Store(ownerId, name, category, address, minOrderAmount, deliveryFee);
     }
 
-    public void update(String name, Category category, String address, Integer minOrderAmount, Integer deliveryFee) {
+    public void update(String name, Category category, String address, Integer minOrderAmount, Integer deliveryFee,
+                       String imageKey) {
         this.name = name;
         this.category = category;
         this.address = address;
         this.minOrderAmount = minOrderAmount;
         this.deliveryFee = deliveryFee;
+        this.imageKey = imageKey;
     }
 
     public void changeOperationStatus(OperationStatus operationStatus) {

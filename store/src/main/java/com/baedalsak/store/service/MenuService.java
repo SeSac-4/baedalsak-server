@@ -2,6 +2,7 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.store.config.ImageProperties;
 import com.baedalsak.store.domain.Menu;
 import com.baedalsak.store.dto.request.MenuUpsertRequest;
 import com.baedalsak.store.dto.request.SaleStatusRequest;
@@ -27,6 +28,8 @@ public class MenuService {
     private final MenuRepository menuRepository;
     private final StoreRepository storeRepository;
     private final StoreOwnership storeOwnership;
+    private final ImageService imageService;
+    private final ImageProperties imageProperties;
     private final Clock clock;
 
     // 삭제된 메뉴는 빼고, 품절은 saleStatus=SOLD_OUT 으로 포함한다
@@ -36,7 +39,7 @@ public class MenuService {
             throw new BusinessException(StoreErrorCode.STORE_NOT_FOUND);
         }
         return menuRepository.findAllByStoreIdAndDeletedAtIsNullOrderById(storeId).stream()
-                .map(MenuResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -44,16 +47,18 @@ public class MenuService {
     @Transactional
     public MenuResponse create(LoginMember member, Long storeId, MenuUpsertRequest request) {
         storeOwnership.getOwnedStore(member, storeId);
-        Menu menu = menuRepository.save(
-                Menu.create(storeId, request.name(), request.description(), request.price()));
-        return MenuResponse.from(menu);
+        imageService.requireOwnKey(storeId, request.imageKey());
+        Menu menu = menuRepository.save(Menu.create(storeId, request.name(), request.description(),
+                request.price(), request.imageKey()));
+        return toResponse(menu);
     }
 
     @Transactional
     public MenuResponse update(LoginMember member, Long storeId, Long menuId, MenuUpsertRequest request) {
         Menu menu = getOwnedMenu(member, storeId, menuId);
-        menu.update(request.name(), request.description(), request.price());
-        return MenuResponse.from(menu);
+        imageService.requireOwnKey(storeId, request.imageKey());
+        menu.update(request.name(), request.description(), request.price(), request.imageKey());
+        return toResponse(menu);
     }
 
     @Transactional
@@ -66,7 +71,11 @@ public class MenuService {
     public MenuResponse changeSaleStatus(LoginMember member, Long storeId, Long menuId, SaleStatusRequest request) {
         Menu menu = getOwnedMenu(member, storeId, menuId);
         menu.changeSaleStatus(request.saleStatus());
-        return MenuResponse.from(menu);
+        return toResponse(menu);
+    }
+
+    private MenuResponse toResponse(Menu menu) {
+        return MenuResponse.from(menu, imageProperties);
     }
 
     // 내 가게의 삭제되지 않은 메뉴. 다른 가게 메뉴·삭제된 메뉴는 404 MENU_NOT_FOUND

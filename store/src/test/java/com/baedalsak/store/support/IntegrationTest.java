@@ -1,5 +1,6 @@
 package com.baedalsak.store.support;
 
+import com.baedalsak.store.config.ImageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +14,11 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.time.Clock;
 import java.time.ZoneId;
@@ -63,6 +69,16 @@ public abstract class IntegrationTest {
         @Primary
         Clock fixedClock() {
             return Clock.fixed(NOW.toInstant(), NOW.getZone());
+        }
+
+        // 업로드 URL 서명용 가짜 자격 증명. 서명만 계산하고 S3 는 호출하지 않으므로 AWS 키가 없어도 된다
+        @Bean
+        @Primary
+        S3Presigner testS3Presigner(ImageProperties props) {
+            return S3Presigner.builder()
+                    .region(Region.of(props.region()))
+                    .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
+                    .build();
         }
     }
 }
