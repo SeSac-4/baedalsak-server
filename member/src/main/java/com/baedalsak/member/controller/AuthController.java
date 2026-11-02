@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -75,8 +76,10 @@ public class AuthController {
   //   access 토큰이 만료됐어도 세션 쿠키만 있으면 동작. 세션 쿠키가 없어도 204
   @PostMapping("/logout")
   public ResponseEntity<Void> logout(
-      @CookieValue(name = AuthCookies.SESSION, required = false) String sessionId) {
-    authService.logout(sessionId);
+      @CookieValue(name = AuthCookies.SESSION, required = false) String sessionId,
+      @RequestHeader(name = "X-Token-Id", required = false) String tokenId,
+      @RequestHeader (name = "X-Token-Expires-At", required = false) Long expriesAt) {
+    authService.logout(sessionId, tokenId, expriesAt);
 
     return ResponseEntity.noContent()
         .header(HttpHeaders.SET_COOKIE, authCookies.clearAccess().toString())
