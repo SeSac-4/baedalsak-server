@@ -1,9 +1,6 @@
 package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.domain.Delivery;
-import com.baedalsak.delivery.dto.DeliveryCreateRequest;
-import com.baedalsak.delivery.dto.DeliveryCreateResponse;
-import com.baedalsak.delivery.exception.DeliveryAlreadyExistsException;
 import com.baedalsak.delivery.payload.OrderAcceptedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.ProcessedEventRepository;
@@ -16,7 +13,7 @@ import java.util.UUID;
 
 /**
  * 6.1.1 배달 요청 생성. 생성된 요청은 배차 대기(WAITING) 상태.
- * 입구는 두 개: OrderAccepted 소비(OrderAcceptedListener), POST /v1/deliveries(DeliveryController).
+ * 입구는 OrderAccepted 소비(OrderAcceptedListener) 하나다.
  */
 @Slf4j
 @Service
@@ -44,19 +41,5 @@ public class DeliveryCreateService {
 
         Delivery delivery = deliveryRepository.save(event.toEntity());
         log.info("delivery created: deliveryId={}, orderId={}", delivery.getId(), delivery.getOrderId());
-    }
-
-    /**
-     * HTTP 요청. 이벤트와 달리 재전송을 조용히 넘기지 않고 409 로 알린다.
-     */
-    @Transactional
-    public DeliveryCreateResponse create(DeliveryCreateRequest request) {
-        if (deliveryRepository.existsByOrderId(request.orderId())) {
-            throw new DeliveryAlreadyExistsException(request.orderId());
-        }
-
-        Delivery delivery = deliveryRepository.save(request.toEntity());
-        log.info("delivery created via api: deliveryId={}, orderId={}", delivery.getId(), delivery.getOrderId());
-        return DeliveryCreateResponse.from(delivery);
     }
 }
