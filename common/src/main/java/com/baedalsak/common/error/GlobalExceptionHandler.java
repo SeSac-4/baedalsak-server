@@ -30,11 +30,18 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(code.getStatus()).body(ErrorResponse.of(code, errors, traceId));
   }
 
-  //서비스 코드에서 던진 BusinessException
+  //서비스 코드에서 던진 BusinessException. 4xx는 WARN, 5xx(Cognito·Redis 장애 등)는 ERROR로 남김
   @ExceptionHandler (BusinessException.class)
   public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
-    return build(e.getErrorCode(), e.getErrors());
-
+    ErrorCode code = e.getErrorCode();
+    List<String> fields = e.getErrors() == null ? List.of()
+        : e.getErrors().stream().map(FieldErrorDetail::field).toList();
+    if (code.getStatus() >= 500) {
+      log.error("업무 예외 code={} status={}", code.name(), code.getStatus(), e);
+    } else {
+      log.warn("업무 예외 code={} status={} fields={}", code.name(), code.getStatus(), fields);
+    }
+    return build(code, e.getErrors());
   }
 
   //@Valid검증실패: 어떤 필드가 틀렸는지 errors에 담기
