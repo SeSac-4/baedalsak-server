@@ -67,8 +67,7 @@ spring:
 image:
   region: ${AWS_REGION:ap-northeast-2}
   bucket: ${IMAGE_BUCKET:baedalsak-images}
-  object-prefix: images/                                    # S3 객체 키 = images/ + imageKey (CloudFront /images/* 경로와 같게)
-  base-url: ${IMAGE_BASE_URL:https://baedalsak.click/images}  # imageUrl = base-url + / + imageKey
+  base-url: ${IMAGE_BASE_URL:https://baedalsak.click/images}  # imageUrl = base-url + / + imageKey (CloudFront 가 /images 를 떼고 S3 로)
   upload-url-ttl: 5m                                        # 업로드 URL 만료
 
 management:

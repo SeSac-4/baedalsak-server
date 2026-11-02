@@ -54,8 +54,8 @@ class ImageControllerTest extends IntegrationTest {
 
             String imageKey = JsonPath.read(body, "$.imageKey");
             String uploadUrl = JsonPath.read(body, "$.uploadUrl");
-            // 객체 키 = images/ + imageKey (CloudFront /images/* 와 같은 경로)
-            assertThat(uploadUrl).startsWith("https://baedalsak-images.s3.ap-northeast-2.amazonaws.com/images/" + imageKey + "?");
+            // S3 객체 키 = imageKey (CloudFront 가 /images 를 떼고 S3 로 보내므로 앞에 붙이지 않는다)
+            assertThat(uploadUrl).startsWith("https://baedalsak-images.s3.ap-northeast-2.amazonaws.com/" + imageKey + "?");
             // 형식·크기를 S3 에서도 강제하도록 Content-Type·Content-Length 가 서명에 들어간다
             assertThat(uploadUrl).contains("X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost");
             assertThat(uploadUrl).contains("X-Amz-Expires=300");

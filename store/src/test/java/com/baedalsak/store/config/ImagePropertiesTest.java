@@ -25,6 +25,6 @@ class ImagePropertiesTest {
     }
 
     private ImageProperties props(String baseUrl) {
-        return new ImageProperties("ap-northeast-2", "bucket", "images/", baseUrl, Duration.ofMinutes(5));
+        return new ImageProperties("ap-northeast-2", "bucket", baseUrl, Duration.ofMinutes(5));
     }
 }

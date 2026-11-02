@@ -37,7 +37,7 @@ public class ImageService {
                 .signatureDuration(imageProperties.uploadUrlTtl())
                 .putObjectRequest(put -> put
                         .bucket(imageProperties.bucket())
-                        .key(imageProperties.objectPrefix() + imageKey)
+                        .key(imageKey)
                         .contentType(request.contentType())
                         .contentLength(request.size())));
 

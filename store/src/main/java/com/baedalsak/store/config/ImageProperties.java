@@ -10,15 +10,15 @@ import java.time.Duration;
 /**
  * application.yml 의 image.* 값 (#110). 비어 있으면 기동 실패 (fail fast).
  *
- * @param objectPrefix S3 객체 키 앞에 붙는 경로. 객체 키 = objectPrefix + imageKey
- * @param baseUrl      CDN 기본 주소. imageUrl = baseUrl + "/" + imageKey (끝의 / 는 있어도 없어도 됨)
+ * @param bucket  사진 버킷. S3 객체 키 = imageKey (stores/{storeId}/…)
+ * @param baseUrl CDN 기본 주소. imageUrl = baseUrl + "/" + imageKey (끝의 / 는 있어도 없어도 됨).
+ *                CloudFront /images/* 가 앞의 /images 를 떼고 S3 로 보낸다
  */
 @Validated
 @ConfigurationProperties(prefix = "image")
 public record ImageProperties(
         @NotBlank String region,
         @NotBlank String bucket,
-        @NotNull String objectPrefix,
         @NotBlank String baseUrl,
         @NotNull Duration uploadUrlTtl
 ) {
