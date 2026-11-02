@@ -62,6 +62,15 @@ spring:
           multiplier: 2
           max-interval: 10s
 
+# 가게·메뉴 사진 (#110). 프론트가 업로드 URL 로 S3 에 직접 올리고, DB 에는 키(stores/{id}/…)만 저장
+#   AWS: 인프라가 IMAGE_BUCKET·IMAGE_BASE_URL 주입 / 자격 증명은 SDK 기본 체인 (로컬 ~/.aws, AWS Pod Identity)
+image:
+  region: ${AWS_REGION:ap-northeast-2}
+  bucket: ${IMAGE_BUCKET:baedalsak-images}
+  object-prefix: images/                                    # S3 객체 키 = images/ + imageKey (CloudFront /images/* 경로와 같게)
+  base-url: ${IMAGE_BASE_URL:https://baedalsak.click/images/} # imageUrl = base-url + imageKey
+  upload-url-ttl: 5m                                        # 업로드 URL 만료
+
 management:
   endpoints:
     web:
