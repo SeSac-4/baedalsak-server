@@ -2,6 +2,7 @@ package com.baedalsak.store.service;
 
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.store.config.ImageProperties;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.domain.Store;
@@ -34,6 +35,7 @@ public class StoreQueryService {
 
     private final StoreRepository storeRepository;
     private final BusinessHourRepository businessHourRepository;
+    private final ImageProperties imageProperties;
     private final Clock clock;
 
     public List<CategoryResponse> getCategories() {
@@ -59,7 +61,8 @@ public class StoreQueryService {
                 .collect(Collectors.toMap(BusinessHour::getStoreId, Function.identity()));
 
         return stores.stream()
-                .map(store -> StoreSummaryResponse.of(store, todayHours.get(store.getId()), now.toLocalTime()))
+                .map(store -> StoreSummaryResponse.of(store, todayHours.get(store.getId()), now.toLocalTime(),
+                        imageProperties))
                 .toList();
     }
 
@@ -78,6 +81,6 @@ public class StoreQueryService {
 
     private StoreDetailResponse toDetail(Store store) {
         List<BusinessHour> hours = businessHourRepository.findAllByStoreIdOrderByDayOfWeek(store.getId());
-        return StoreDetailResponse.of(store, hours, LocalDateTime.now(clock));
+        return StoreDetailResponse.of(store, hours, LocalDateTime.now(clock), imageProperties);
     }
 }
