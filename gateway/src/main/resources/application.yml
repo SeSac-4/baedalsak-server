@@ -10,6 +10,8 @@ server:
   shutdown: graceful                  # 배포 중 처리 중인 요청을 끝내고 종료 (docs 6-4)
 
 spring:
+  main:
+    web-application-type: reactive    # common 의 webmvc(compileOnly)가 IDE 실행 경로에 보여도 WebFlux 로 뜨게
   application:
     name: gateway
   lifecycle:
