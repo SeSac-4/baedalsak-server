@@ -9,6 +9,10 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+
+import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.gateway.error.GatewayErrorWriter;
+
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 
@@ -22,12 +26,12 @@ import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 public class SecurityConfig {
 
     @Bean
-    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, GatewayErrorWriter errorWriter) {
         return http
             // 쿠키 기반이지만 CSRF 는 X-Requested-With 검사로 직접 한다 (8단계)
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
             //커스텀 헤더 존재 검사
-            .addFilterAfter(new RequestedWithHeaderFilter(), SecurityWebFiltersOrder.CSRF)
+            .addFilterAfter(new RequestedWithHeaderFilter(errorWriter), SecurityWebFiltersOrder.CSRF)
             // 로그인 화면·Basic 인증·/logout 은 member 가 담당 → Security 기본 기능 끔
             .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
             .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
@@ -35,7 +39,13 @@ public class SecurityConfig {
             // JWT 경비원: 쿠키 __Host-access 에서 토큰을 꺼내(3단계) Cognito 공개키로 서명·만료·iss 검사(2단계)
             .oauth2ResourceServer(oauth2 -> oauth2
                 .bearerTokenConverter(new CookieBearerTokenConverter())
-                .jwt(Customizer.withDefaults()))
+                .jwt(Customizer.withDefaults())
+                // ① 토큰이 있는데 망가짐·만료 → 401
+                .authenticationEntryPoint((exchange, e) -> errorWriter.write(exchange, CommonErrorCode.UNAUTHORIZED)))
+            // ② 권한 검사에서 막힘: 토큰 없음 → 401, 역할 불일치 → 403
+            .exceptionHandling(handling -> handling
+                .authenticationEntryPoint((exchange, e) -> errorWriter.write(exchange, CommonErrorCode.UNAUTHORIZED))
+                .accessDeniedHandler((exchange, e) -> errorWriter.write(exchange, CommonErrorCode.FORBIDDEN)))
             .authorizeExchange(exchanges -> exchanges
                 // 운영 상태 확인: AWS 는 8081 별도 포트지만 같은 보안 필터를 지난다 → 막으면 probe 실패로 파드 재시작
                 .pathMatchers("/actuator/**").permitAll()

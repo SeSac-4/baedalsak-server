@@ -11,6 +11,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
+import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.gateway.error.GatewayErrorWriter;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
@@ -28,8 +31,8 @@ public class TokenBlacklistFilter implements GlobalFilter, Ordered {
   // member TokenBlacklistStore 와 같은 접두사여야 한다
   private static final String KEY_PREFIX = "blacklist:";
   private static final Duration TIMEOUT = Duration.ofMillis(100);
-
   private final ReactiveStringRedisTemplate redis;
+  private final GatewayErrorWriter errorWriter;
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -51,8 +54,7 @@ public class TokenBlacklistFilter implements GlobalFilter, Ordered {
   }
 
   private Mono<Void> reject(ServerWebExchange exchange) {
-    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-    return exchange.getResponse().setComplete();   // 서비스로 보내지 않고 바로 응답
+    return errorWriter.write(exchange, CommonErrorCode.UNAUTHORIZED);   // 서비스로 보내지 않고 바로 응답
   }
 
   @Override

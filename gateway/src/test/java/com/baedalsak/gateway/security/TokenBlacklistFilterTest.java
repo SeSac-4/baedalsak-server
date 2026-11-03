@@ -19,6 +19,9 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ServerWebExchange;
+// import 추가
+import com.baedalsak.gateway.error.GatewayErrorWriter;
+import tools.jackson.databind.json.JsonMapper;
 
 import reactor.core.publisher.Mono;
 
@@ -27,7 +30,7 @@ class TokenBlacklistFilterTest {
 
   private final ReactiveStringRedisTemplate redis = mock(ReactiveStringRedisTemplate.class);
   private final GatewayFilterChain chain = mock(GatewayFilterChain.class);
-  private final TokenBlacklistFilter filter = new TokenBlacklistFilter(redis);
+  private final TokenBlacklistFilter filter = new TokenBlacklistFilter(redis, new GatewayErrorWriter(JsonMapper.builder().build()));
 
   @BeforeEach
   void setUp() {
