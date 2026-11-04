@@ -49,22 +49,22 @@ public class SecurityConfig {
             .authorizeExchange(exchanges -> exchanges
                 // 운영 상태 확인: AWS 는 8081 별도 포트지만 같은 보안 필터를 지난다 → 막으면 probe 실패로 파드 재시작
                 .pathMatchers("/actuator/**").permitAll()
-                // 인증 창구: 가입 3종·로그인·갱신·로그아웃 (설계서 API 명세 '인증 불필요' / 로그아웃 '세션 쿠키')
+                // 로그인 없이 유일한 경로인 인증 창구: 가입 3종·로그인·갱신·로그아웃 
                 .pathMatchers(HttpMethod.POST, "/api/v*/auth/**").permitAll()
 
-                // ── 사장님 (위에서부터 처음 맞는 규칙 적용 → 공개 규칙 /stores/* 보다 먼저) ──
+                // ── 사장님 (위에서부터 처음 맞는 규칙 적용 →  /stores/* 보다 먼저) ──
                 .pathMatchers(HttpMethod.GET, "/api/v*/stores/me", "/api/v*/stores/*/orders").hasRole("OWNER")
                 .pathMatchers(HttpMethod.POST, "/api/v*/stores", "/api/v*/stores/*/menus", "/api/v*/orders/*/accept").hasRole("OWNER")
                 .pathMatchers(HttpMethod.PUT, "/api/v*/stores/**").hasRole("OWNER")     // 가게 수정·영업시간·메뉴 수정
                 .pathMatchers(HttpMethod.PATCH, "/api/v*/stores/**").hasRole("OWNER")   // 운영 상태·품절
                 .pathMatchers(HttpMethod.DELETE, "/api/v*/stores/**").hasRole("OWNER")  // 메뉴 삭제
 
-                // 가게·메뉴 둘러보기 (설계서 API 명세 '인증 불필요')
+                // 가게·메뉴 조회: 로그인하면 역할 상관없이 통과. 
                 .pathMatchers(HttpMethod.GET,
                     "/api/v*/categories",
                     "/api/v*/stores",
                     "/api/v*/stores/*",
-                    "/api/v*/stores/*/menus").permitAll()
+                    "/api/v*/stores/*/menus").authenticated()
 
                 // ── 고객·사장님 공용: 주문 상세, 주문의 배달 정보 (소유권은 각 서비스가 확인) ──
                 .pathMatchers(HttpMethod.GET, "/api/v*/orders/*", "/api/v*/deliveries/by-order/*").hasAnyRole("CUSTOMER", "OWNER")
