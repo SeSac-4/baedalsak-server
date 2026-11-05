@@ -1,5 +1,6 @@
 package com.baedalsak.payment.config;
 
+import org.aopalliance.aop.Advice;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Declarables;
@@ -7,11 +8,18 @@ import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.amqp.autoconfigure.RabbitListenerRetrySettingsCustomizer;
+import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 
 /**
  * RabbitMQ exchange·큐·DLQ 선언 (docs 3-1·10-3, 설계서 '이벤트 목록' 탭).
@@ -57,6 +65,31 @@ public class RabbitConfig {
   @Bean
   MessageConverter jsonMessageConverter() {
     return new JacksonJsonMessageConverter();
+  }
+
+  /**
+   * 리스너 컨테이너 팩토리 (#126). Boot 가 만드는 것과 같게 설정(application.yml listener · retry, 아래 skipRetryOnReject)한 뒤,
+   * advice chain 맨 앞(재시도 바깥)에 OriginTraceIdAdvice 를 넣는다. 이 팩토리를 쓰는 모든 @RabbitListener 에 적용된다.
+   * 이후 별도 컨테이너(결제 취소 명령 리스너)를 만들 때도 withOriginTraceId 로 같은 설정을 적용한다.
+   */
+  @Bean(name = "rabbitListenerContainerFactory")
+  SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
+      SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
+      ObjectProvider<ContainerCustomizer<SimpleMessageListenerContainer>> containerCustomizer) {
+    SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+    configurer.configure(factory, connectionFactory);
+    containerCustomizer.ifUnique(factory::setContainerCustomizer);
+    factory.setAdviceChain(withOriginTraceId(factory.getAdviceChain()));
+    return factory;
+  }
+
+  // 기존 advice chain(재시도 등) 앞에 OriginTraceIdAdvice 를 붙인다. 앞에 둔 advice 가 바깥에서 감싼다
+  static Advice[] withOriginTraceId(Advice[] chain) {
+    Advice[] existing = chain == null ? new Advice[0] : chain;
+    Advice[] result = new Advice[existing.length + 1];
+    result[0] = new OriginTraceIdAdvice();
+    System.arraycopy(existing, 0, result, 1, existing.length);
+    return result;
   }
 
   // 영구 오류(AmqpRejectAndDontRequeueException)는 앱 안에서 재시도하지 않고 바로 DLQ (docs 10-4)
