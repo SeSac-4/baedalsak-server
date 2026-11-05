@@ -260,6 +260,24 @@ class OrderControllerTest extends IntegrationTest {
         }
 
         @Test
+        void 결제만료는_보이지_않고_거절과_취소는_보인다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAYMENT_EXPIRED");
+            setStatus(2, "REJECTED");
+            setStatus(3, "CANCELED");
+
+            owner(get("/v1/stores/1/orders"))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].status").value("CANCELED"))
+                    .andExpect(jsonPath("$.content[1].status").value("REJECTED"));
+            owner(get("/v1/stores/1/orders").param("status", "PAYMENT_EXPIRED"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(0));
+        }
+
+        @Test
         void 주문이_없으면_빈_페이지() throws Exception {
             owner(get("/v1/stores/1/orders"))
                     .andExpect(status().isOk())
