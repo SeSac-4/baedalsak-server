@@ -99,6 +99,17 @@ spring:
                 connect-timeout: 1000      # ms. FastAPI 에 연결 못 하면 1초 만에 포기 → 503
                 response-timeout: 20000    # ms. 이 경로만 20초 (CloudFront 30초보다 짧게, 수치 미정)
 
+# 요청 제한 (#24, 설계서 v6 API 명세 429). 값은 부하 테스트 후 조정
+rate-limit:
+  enabled: false            # 요청제한 꺼둠. (부하 테스트, 시연 때를 위함)
+  auth-per-ip: 10           # 로그인·가입: IP 하나당 1분에 10번
+  payment-per-member: 10    # 결제: 회원 한 명당 1분에 10번 (제안값)
+  ai-image-per-member: 10    #이미지 업도르 요청 1분에 10번(ai)
+  default-per-client: 100   # 그 밖의 API: 회원당(로그인 전은 IP당) 1분에 100번
+  trusted-proxies: 2        # X-Forwarded-For 에서 뒤에서 몇 번째 값을 실제 IP 로 믿을지 (아래 설명)
+  timeout: 100ms            # Redis 가 이보다 늦으면 세지 않고 통과 (fail-open)
+
+
 management:
   endpoints:
     web:
