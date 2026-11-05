@@ -55,6 +55,7 @@ public class SecurityConfig {
                 // ── 사장님 (위에서부터 처음 맞는 규칙 적용 →  /stores/* 보다 먼저) ──
                 .pathMatchers(HttpMethod.GET, "/api/v*/stores/me", "/api/v*/stores/*/orders").hasRole("OWNER")
                 .pathMatchers(HttpMethod.POST, "/api/v*/stores", "/api/v*/stores/*/menus", "/api/v*/orders/*/accept").hasRole("OWNER")
+                .pathMatchers(HttpMethod.POST, "/api/v*/images/background-removal").hasRole("OWNER")
                 .pathMatchers(HttpMethod.PUT, "/api/v*/stores/**").hasRole("OWNER")     // 가게 수정·영업시간·메뉴 수정
                 .pathMatchers(HttpMethod.PATCH, "/api/v*/stores/**").hasRole("OWNER")   // 운영 상태·품절
                 .pathMatchers(HttpMethod.DELETE, "/api/v*/stores/**").hasRole("OWNER")  // 메뉴 삭제

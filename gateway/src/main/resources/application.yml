@@ -88,6 +88,16 @@ spring:
               order: 6
               predicates:
                 - Path=/api/v*/auth/**,/api/v*/members/**
+            # 메뉴 사진 배경 제거 (FastAPI). 사장님만 — 권한은 SecurityConfig
+            - id: ai-image
+              uri: ${AI_SERVICE_URL:http://localhost:8000}
+              order: 7
+              predicates:
+                - Path=/api/v*/images/background-removal
+                - Method=POST
+              metadata:
+                connect-timeout: 1000      # ms. FastAPI 에 연결 못 하면 1초 만에 포기 → 503
+                response-timeout: 20000    # ms. 이 경로만 20초 (CloudFront 30초보다 짧게, 수치 미정)
 
 management:
   endpoints:
