@@ -12,10 +12,10 @@ import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.response.PaymentReadyResponse;
 import com.baedalsak.payment.error.PaymentErrorCode;
 import com.baedalsak.payment.repository.PaymentRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,7 +31,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * 결제 요청 생성 (#13). order 내부 API 검증·기존 결제 재사용·동시 요청
+ * 결제 요청 생성 — 고객 API (#13). order 내부 API 검증·기존 결제 재사용·동시 요청. 저장은 실제 PaymentCreator (#128)
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -42,8 +42,14 @@ class PaymentServiceTest {
     OrderClient orderClient;
     @Mock
     PaymentRepository paymentRepository;
-    @InjectMocks
+    @Mock
+    PaymentExpirer paymentExpirer;
     PaymentService paymentService;
+
+    @BeforeEach
+    void setUp() {
+        paymentService = new PaymentService(orderClient, new PaymentCreator(paymentRepository, paymentExpirer));
+    }
 
     @Test
     void 결제대기_주문이면_스냅샷과_함께_결제를_만든다() {
@@ -98,6 +104,19 @@ class PaymentServiceTest {
 
         assertThat(response.paymentId()).isEqualTo(7L);
         assertThat(response.tossOrderId()).isEqualTo("BDS-1005-1");
+    }
+
+    @Test
+    void 새_결제_요청에_밀려_만료된_주문이면_409_PAYMENT_INVALID_STATUS() {
+        Payment expired = withId(payment(), 7L);
+        ReflectionTestUtils.setField(expired, "status", PaymentStatus.EXPIRED);
+        given(orderClient.getOrder(1005L)).willReturn(Optional.of(order(1L, OrderStatus.PENDING_PAYMENT)));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> paymentService.request(CUSTOMER, 1005L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PaymentErrorCode.PAYMENT_INVALID_STATUS);
     }
 
     @Test
