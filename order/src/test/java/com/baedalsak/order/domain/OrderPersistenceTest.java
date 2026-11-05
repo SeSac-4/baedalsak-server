@@ -67,6 +67,26 @@ class OrderPersistenceTest extends IntegrationTest {
     }
 
     @Test
+    void 사가_상태값을_저장하고_읽는다() {
+        Long id = orderRepository.save(order(13500, 3000)).getId();
+
+        for (OrderStatus status : List.of(OrderStatus.PAYMENT_EXPIRED, OrderStatus.REJECTED, OrderStatus.CANCELED)) {
+            jdbcTemplate.update("UPDATE orders.orders SET status = ? WHERE id = ?", status.name(), id);
+
+            assertThat(orderRepository.findById(id).orElseThrow().getStatus()).isEqualTo(status);
+        }
+    }
+
+    @Test
+    void 없는_상태값은_DB_가_거부한다() {
+        Long id = orderRepository.save(order(13500, 3000)).getId();
+
+        assertThatThrownBy(() -> jdbcTemplate.update("UPDATE orders.orders SET status = 'DONE' WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("orders_status_ck");
+    }
+
+    @Test
     void 장바구니는_고객당_하나() {
         String sql = "INSERT INTO orders.cart (customer_id, store_id, store_name, delivery_fee, min_order_amount) "
                 + "VALUES (7, ?, '싹분식', 3000, 12000)";

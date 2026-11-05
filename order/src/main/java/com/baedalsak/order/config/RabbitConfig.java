@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * RabbitMQ exchange·큐·DLQ 선언 (docs 3-1, 설계서 '이벤트 목록' 탭).
- * 큐는 받는 서비스가 선언·소유한다 → order 는 payment·delivery 이벤트 큐 4개를 선언. 메일 큐는 #33 에서 추가.
+ * 큐는 받는 서비스가 선언·소유한다 → order 는 payment·delivery 이벤트 큐 6개를 선언. 메일 큐는 #33 에서 추가.
  * 이미 만들어진 큐의 인자(DLX·quorum 등)를 바꾸면 PRECONDITION_FAILED 로 앱이 시작되지 않으니 주의.
  */
 @Configuration
@@ -23,6 +23,8 @@ public class RabbitConfig {
     public static final String DEAD_LETTER_EXCHANGE = "order.dlx";
 
     public static final String PAYMENT_APPROVED_QUEUE = "order.payment-approved";
+    public static final String PAYMENT_CANCELED_QUEUE = "order.payment-canceled";
+    public static final String PAYMENT_CANCEL_FAILED_QUEUE = "order.payment-cancel-failed";
     public static final String DELIVERY_ASSIGNED_QUEUE = "order.delivery-assigned";
     public static final String DELIVERY_PICKED_UP_QUEUE = "order.delivery-picked-up";
     public static final String DELIVERY_COMPLETED_QUEUE = "order.delivery-completed";
@@ -42,6 +44,17 @@ public class RabbitConfig {
     @Bean
     Declarables paymentApprovedQueues() {
         return consumerQueues(PAYMENT_APPROVED_QUEUE, "payment.approved");
+    }
+
+    // 결제 취소 응답 큐. payment 발행기가 mandatory 라 #127 배포 전에 있어야 한다. 소비 리스너는 거절·취소 작업에서 붙인다
+    @Bean
+    Declarables paymentCanceledQueues() {
+        return consumerQueues(PAYMENT_CANCELED_QUEUE, "payment.canceled");
+    }
+
+    @Bean
+    Declarables paymentCancelFailedQueues() {
+        return consumerQueues(PAYMENT_CANCEL_FAILED_QUEUE, "payment.cancel-failed");
     }
 
     @Bean
