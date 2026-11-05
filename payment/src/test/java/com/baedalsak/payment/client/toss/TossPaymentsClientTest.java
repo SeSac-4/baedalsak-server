@@ -1,8 +1,6 @@
 package com.baedalsak.payment.client.toss;
 
-import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.payment.dto.request.ConfirmPaymentRequest;
-import com.baedalsak.payment.error.PaymentErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -15,6 +13,7 @@ import java.net.SocketTimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -25,7 +24,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
- * 토스 결제 승인 클라이언트. 응답 모양은 토스 결제 승인 API(Payment 객체) 기준
+ * 토스 결제 클라이언트. 응답 모양은 토스 결제 승인 · 조회 API(Payment 객체), 에러 본문은 {code, message} 기준
  */
 class TossPaymentsClientTest {
 
@@ -37,16 +36,19 @@ class TossPaymentsClientTest {
     @BeforeEach
     void setUp() {
         RestClient.Builder builder = new TossConfig().tossRestClient(RestClient.builder(),
-                new TossProperties("http://toss", "test_sk", java.time.Duration.ofSeconds(5))).mutate();
+                new TossProperties("http://toss", "test_sk", java.time.Duration.ofSeconds(2),
+                        java.time.Duration.ofSeconds(5), java.time.Duration.ofSeconds(15))).mutate();
         server = MockRestServiceServer.bindTo(builder).build();
         client = new TossPaymentsClient(builder.build());
     }
 
     @Test
-    void 승인_요청을_보내고_결과를_받는다() {
+    void 승인_요청을_멱등_키와_함께_보내고_결과를_받는다() {
         server.expect(requestTo("http://toss/v1/payments/confirm")).andExpect(method(POST))
                 // "test_sk:" Base64
                 .andExpect(header("Authorization", "Basic dGVzdF9zazo="))
+                // #125: 멱등 키 = paymentKey
+                .andExpect(header("Idempotency-Key", "tgen_key"))
                 .andExpect(content().json("""
                         {"paymentKey":"tgen_key","orderId":"BDS-1005-1","amount":18000}
                         """))
@@ -61,6 +63,9 @@ class TossPaymentsClientTest {
         TossConfirmResponse response = client.confirm(REQUEST);
 
         assertThat(response.paymentKey()).isEqualTo("tgen_key");
+        assertThat(response.status()).isEqualTo("DONE");
+        assertThat(response.isDone()).isTrue();
+        assertThat(response.totalAmount()).isEqualTo(18000);
         assertThat(response.method()).isEqualTo("카드");
         assertThat(response.approvedAt()).isEqualTo("2026-10-26T15:30:00+09:00");
         assertThat(response.receiptUrl()).isEqualTo("https://dashboard.tosspayments.com/receipt/1");
@@ -98,42 +103,82 @@ class TossPaymentsClientTest {
     }
 
     @Test
-    void 토스가_거절하면_502() {
+    void 토스_에러_응답이면_상태_코드_메시지를_담아_던진다() {
         server.expect(requestTo("http://toss/v1/payments/confirm"))
-                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"code\":\"ALREADY_PROCESSED_PAYMENT\",\"message\":\"이미 처리된 결제 입니다.\"}"));
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"REJECT_CARD_COMPANY\",\"message\":\"카드사에서 승인을 거절했습니다.\"}"));
 
-        assertGatewayError();
+        assertThatThrownBy(() -> client.confirm(REQUEST))
+                .isInstanceOfSatisfying(TossApiException.class, e -> {
+                    assertThat(e.isNoResponse()).isFalse();
+                    assertThat(e.getStatus()).isEqualTo(403);
+                    assertThat(e.getCode()).isEqualTo("REJECT_CARD_COMPANY");
+                    assertThat(e.getTossMessage()).isEqualTo("카드사에서 승인을 거절했습니다.");
+                });
     }
 
     @Test
-    void 토스_서버_오류면_502() {
+    void 에러_본문을_읽을_수_없으면_코드는_null() {
         server.expect(requestTo("http://toss/v1/payments/confirm"))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
-        assertGatewayError();
+        assertThatThrownBy(() -> client.confirm(REQUEST))
+                .isInstanceOfSatisfying(TossApiException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(500);
+                    assertThat(e.getCode()).isNull();
+                });
     }
 
     @Test
-    void 응답이_없으면_502() {
+    void 응답이_없으면_응답_없음으로_던진다() {
         server.expect(requestTo("http://toss/v1/payments/confirm"))
                 .andRespond(withException(new SocketTimeoutException("Read timed out")));
 
-        assertGatewayError();
+        assertNoResponse();
     }
 
     @Test
-    void 연결할_수_없으면_502() {
+    void 연결할_수_없으면_응답_없음으로_던진다() {
         server.expect(requestTo("http://toss/v1/payments/confirm"))
                 .andRespond(withException(new IOException("connection refused")));
 
-        assertGatewayError();
+        assertNoResponse();
     }
 
-    private void assertGatewayError() {
+    @Test
+    void 결제를_paymentKey로_조회한다() {
+        server.expect(requestTo("http://toss/v1/payments/tgen_key")).andExpect(method(GET))
+                .andExpect(header("Authorization", "Basic dGVzdF9zazo="))
+                .andRespond(withSuccess("""
+                        {"paymentKey":"tgen_key","orderId":"BDS-1005-1","status":"DONE","method":"카드",
+                         "totalAmount":18000,"approvedAt":"2026-10-26T15:30:00+09:00",
+                         "receipt":{"url":"https://dashboard.tosspayments.com/receipt/1"},
+                         "card":{"approveNo":"30024234"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        TossConfirmResponse response = client.getPayment("tgen_key", "BDS-1005-1");
+
+        assertThat(response.isDone()).isTrue();
+        assertThat(response.orderId()).isEqualTo("BDS-1005-1");
+        assertThat(response.totalAmount()).isEqualTo(18000);
+    }
+
+    @Test
+    void 조회_에러_응답이면_코드를_담아_던진다() {
+        server.expect(requestTo("http://toss/v1/payments/tgen_key"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"NOT_FOUND_PAYMENT\",\"message\":\"존재하지 않는 결제 정보 입니다.\"}"));
+
+        assertThatThrownBy(() -> client.getPayment("tgen_key", "BDS-1005-1"))
+                .isInstanceOfSatisfying(TossApiException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("NOT_FOUND_PAYMENT"));
+    }
+
+    private void assertNoResponse() {
         assertThatThrownBy(() -> client.confirm(REQUEST))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(PaymentErrorCode.PAYMENT_GATEWAY_ERROR);
+                .isInstanceOfSatisfying(TossApiException.class, e -> {
+                    assertThat(e.isNoResponse()).isTrue();
+                    assertThat(e.getCode()).isNull();
+                });
     }
 }

@@ -30,13 +30,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 승인 저장 (#14). 조건부 갱신 결과에 따라 outbox 저장 여부가 갈린다
+ * 승인 저장 (#14). 조건부 갱신 결과에 따라 outbox 저장 여부가 갈린다.
+ * #125: 갱신 조건에 저장해 둔 paymentKey(승인 응답의 paymentKey)가 들어간다
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentApproverTest {
 
     static final OffsetDateTime APPROVED_AT = OffsetDateTime.parse("2026-10-26T15:30:00+09:00");
-    static final TossConfirmResponse TOSS = new TossConfirmResponse("tgen_key", "BDS-1005-1", "카드",
+    static final TossConfirmResponse TOSS = new TossConfirmResponse("tgen_key", "BDS-1005-1", "DONE", 18000, "카드",
             APPROVED_AT, new TossConfirmResponse.Receipt("https://receipt/1"), new TossConfirmResponse.Card("30024234"));
 
     @Mock
@@ -77,7 +78,7 @@ class PaymentApproverTest {
 
     @Test
     void 카드_결제가_아니면_승인번호를_null로_저장한다() {
-        TossConfirmResponse easyPayWithoutCard = new TossConfirmResponse("tgen_key", "BDS-1005-1", "간편결제",
+        TossConfirmResponse easyPayWithoutCard = new TossConfirmResponse("tgen_key", "BDS-1005-1", "DONE", 18000, "간편결제",
                 APPROVED_AT, new TossConfirmResponse.Receipt("https://receipt/1"), null);
         given(paymentRepository.approve(7L, "tgen_key", "간편결제", APPROVED_AT, "https://receipt/1", null,
                 PaymentStatus.REQUESTED, PaymentStatus.APPROVED)).willReturn(1);

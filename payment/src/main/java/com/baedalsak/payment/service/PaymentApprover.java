@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 토스 승인 후 결제 APPROVED 갱신과 PaymentApproved outbox 저장을 한 트랜잭션으로 묶는다 (설계서 'API 명세' 5.2.1, docs 3-2).
- * 조건부 갱신(status='REQUESTED')이 0행이면 이미 승인된 결제 → 409, outbox 는 저장하지 않는다.
+ * 조건부 갱신(status='REQUESTED' + 저장해 둔 paymentKey 와 같음, #125)이 0행이면 이미 승인된 결제 → 409, outbox 는 저장하지 않는다.
  */
 @Component
 @RequiredArgsConstructor
