@@ -123,4 +123,6 @@ payment-mail:
 toss:
   base-url: https://api.tosspayments.com
   secret-key: ${TOSS_SECRET_KEY}      # 비밀값: 기본값 없이 환경 변수로만 받는다 (docs 3번)
-  timeout: 5s
+  connect-timeout: 2s                # 연결에 2초 넘게 걸리면 이미 장애
+  read-timeout: 5s                   # 승인 · 조회 응답 대기
+  confirm-budget: 15s                # 결제 확인 전체 예산: 남은 시간이 호출 1건 최대(7초)보다 적으면 토스를 부르지 않고 502 (결과 모름)
