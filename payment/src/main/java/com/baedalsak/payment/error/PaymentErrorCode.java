@@ -17,6 +17,10 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_NOT_FOUND(404, "결제 정보를 찾을 수 없습니다."),
     PAYMENT_AMOUNT_MISMATCH(400, "결제 금액이 주문 금액과 일치하지 않습니다."),
     PAYMENT_ALREADY_APPROVED(409, "이미 승인된 결제입니다."),
+    // #125: 토스가 승인을 확정 거절함. 응답 message 는 토스 메시지로 바꿔 보낸다 (PaymentExceptionHandler), 이 문구는 토스 메시지가 없을 때만
+    PAYMENT_CONFIRM_REJECTED(400, "결제가 승인되지 않았습니다."),
+    // #125: 이전 paymentKey 의 결과를 아직 모르는 동안 다른 키 승인을 거절
+    PAYMENT_KEY_MISMATCH(409, "이전 결제를 확인하고 있습니다. 잠시 후 다시 시도해 주세요."),
     // 문구는 설계서 '화면 흐름' 탭 U-06 비고
     PAYMENT_GATEWAY_ERROR(502, "결제 확인 중 오류. 다시 시도해 주세요");
 
