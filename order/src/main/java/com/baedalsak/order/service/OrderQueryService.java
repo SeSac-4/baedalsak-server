@@ -33,6 +33,10 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class OrderQueryService {
 
+    // 결제가 끝나지 않았거나 만료된 주문은 사장님이 처리할 주문이 아니다
+    private static final EnumSet<OrderStatus> HIDDEN_FROM_OWNER =
+            EnumSet.of(OrderStatus.PENDING_PAYMENT, OrderStatus.PAYMENT_EXPIRED);
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
 
@@ -47,16 +51,16 @@ public class OrderQueryService {
         return PageResponse.of(orders, content);
     }
 
-    // 사장님 가게 주문 목록 (4.3.1). 결제대기(PENDING_PAYMENT)는 노출하지 않는다. 상태를 안 주면 나머지 전부
+    // 사장님 가게 주문 목록 (4.3.1). 결제대기·결제만료는 노출하지 않는다. 상태를 안 주면 나머지 전부
     public PageResponse<OrderDetailResponse> getStoreOrders(LoginMember member, Long storeId,
                                                             List<OrderStatus> statuses, int page, int size) {
         if (member.role() != MemberRole.OWNER || orderRepository.existsByStoreIdAndOwnerIdNot(storeId, member.id())) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
         }
         EnumSet<OrderStatus> visible = statuses == null || statuses.isEmpty()
-                ? EnumSet.complementOf(EnumSet.of(OrderStatus.PENDING_PAYMENT))
+                ? EnumSet.complementOf(HIDDEN_FROM_OWNER)
                 : EnumSet.copyOf(statuses);
-        visible.remove(OrderStatus.PENDING_PAYMENT);
+        visible.removeAll(HIDDEN_FROM_OWNER);
         if (visible.isEmpty()) {
             return PageResponse.of(Page.empty(PageRequest.of(page, size)), List.of());
         }
