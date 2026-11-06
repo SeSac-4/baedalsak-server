@@ -2,16 +2,23 @@ package com.baedalsak.delivery.controller;
 
 import com.baedalsak.delivery.auth.CurrentMember;
 import com.baedalsak.delivery.auth.LoginMember;
+import com.baedalsak.delivery.dto.DeliveryLocationResponse;
+import com.baedalsak.delivery.dto.DeliveryRouteResponse;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
+import com.baedalsak.delivery.dto.LocationReportRequest;
 import com.baedalsak.delivery.dto.PageResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
+import com.baedalsak.delivery.location.DeliveryTrackingService;
+import com.baedalsak.delivery.location.LocationReportService;
+import com.baedalsak.delivery.location.RiderLocation;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryActiveService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
 import com.baedalsak.delivery.service.DeliveryDetailService;
 import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +26,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +47,8 @@ public class DeliveryController {
     private final DeliveryCompleteService deliveryCompleteService;
     private final DeliveryDetailService deliveryDetailService;
     private final DeliveryActiveService deliveryActiveService;
+    private final DeliveryTrackingService deliveryTrackingService;
+    private final LocationReportService locationReportService;
 
     // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순 (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
     @GetMapping("/waiting")
@@ -80,5 +91,31 @@ public class DeliveryController {
         return deliveryActiveService.getActive(rider.id())
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
+    }
+
+    // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 시 한 번. 픽업 전이면 204
+    @GetMapping("/by-order/{orderId}/route")
+    public ResponseEntity<DeliveryRouteResponse> getRoute(@PathVariable Long orderId,
+                                                          @CurrentMember LoginMember member) {
+        return deliveryTrackingService.getRoute(orderId, member.id())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    // 주문의 실시간 위치 (고객 · 사장님 · 배정된 라이더). 2초 폴링. 상태를 같이 실어 픽업 · 완료도 이 응답으로 안다.
+    // 배달이 없으면 204, 있으면 200 (위치는 픽업 중에만, 아니면 location=null)
+    @GetMapping("/by-order/{orderId}/location")
+    public ResponseEntity<DeliveryLocationResponse> getLocation(@PathVariable Long orderId,
+                                                                @CurrentMember LoginMember member) {
+        return deliveryTrackingService.getLocation(orderId, member.id())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    // 실제 GPS 위치 업로드 (라이더 앱). 배정된 라이더 본인 · 픽업 중(PICKED_UP)만. 보내면 그 배달의 가상 GPS 는 멈춘다
+    @PutMapping("/{deliveryId}/location")
+    public RiderLocation reportLocation(@PathVariable Long deliveryId, @CurrentMember LoginMember rider,
+                                        @Valid @RequestBody LocationReportRequest request) {
+        return locationReportService.reportReal(deliveryId, rider.id(), request.toPoint());
     }
 }

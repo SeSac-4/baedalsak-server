@@ -2,12 +2,14 @@ package com.baedalsak.delivery.dto;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.location.GeoPoint;
 
 import java.time.OffsetDateTime;
 
 /**
  * 배달 상태 (설계서 'API 명세' DeliveryStatus). 배달 완료(6.3.2) 응답, 주문의 배달 상태(6.4.1) 응답.
  * 진행이 끝났거나 고객·사장님이 보는 화면이라 RiderDeliveryResponse 와 달리 고객 연락처(customerPhone)를 싣지 않는다.
+ * pickupPoint · deliveryPoint 는 지도 표시용 좌표 {lat, lng}. 주소 변환 전이거나 실패하면 null (프론트가 주소로 대신 찾음).
  */
 public record DeliveryStatusResponse(
         Long deliveryId,
@@ -18,7 +20,9 @@ public record DeliveryStatusResponse(
         String riderName,
         OffsetDateTime assignedAt,
         OffsetDateTime pickedUpAt,
-        OffsetDateTime completedAt
+        OffsetDateTime completedAt,
+        GeoPoint pickupPoint,
+        GeoPoint deliveryPoint
 ) {
     public static DeliveryStatusResponse from(Delivery delivery) {
         return new DeliveryStatusResponse(
@@ -30,6 +34,8 @@ public record DeliveryStatusResponse(
                 delivery.getRiderName(),
                 delivery.getAssignedAt(),
                 delivery.getPickedUpAt(),
-                delivery.getCompletedAt());
+                delivery.getCompletedAt(),
+                delivery.getPickupPoint(),
+                delivery.getDeliveryPoint());
     }
 }

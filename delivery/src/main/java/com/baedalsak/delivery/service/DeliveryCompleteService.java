@@ -5,12 +5,14 @@ import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.delivery.location.DeliveryFinishedEvent;
 import com.baedalsak.delivery.payload.DeliveryCompletedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -30,6 +32,7 @@ public class DeliveryCompleteService {
     private final DeliveryRepository deliveryRepository;
     private final OutboxRepository outboxRepository;
     private final JsonMapper jsonMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 배달 UPDATE 와 outbox INSERT 를 한 트랜잭션에 → 완료됐는데 이벤트가 빠지는 일이 없다 (docs 3-2)
     @Transactional
@@ -48,6 +51,8 @@ public class DeliveryCompleteService {
 
         log.info("delivery completed: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
+        // 커밋 후 Redis 위치 · 가상 GPS 정리 (DeliveryFinishedListener)
+        eventPublisher.publishEvent(new DeliveryFinishedEvent(delivery.getId()));
         return DeliveryStatusResponse.from(delivery);
     }
 

@@ -5,12 +5,14 @@ import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.delivery.location.PickupCompletedEvent;
 import com.baedalsak.delivery.payload.DeliveryPickedUpEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -30,6 +32,7 @@ public class DeliveryPickupService {
     private final DeliveryRepository deliveryRepository;
     private final OutboxRepository outboxRepository;
     private final JsonMapper jsonMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 배달 UPDATE 와 outbox INSERT 를 한 트랜잭션에 → 픽업됐는데 이벤트가 빠지는 일이 없다 (docs 3-2)
     @Transactional
@@ -48,6 +51,8 @@ public class DeliveryPickupService {
 
         log.info("delivery picked up: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
+        // 커밋 후 경로 저장 (PickupCompletedListener). 길찾기 호출을 이 트랜잭션에 넣지 않는다
+        eventPublisher.publishEvent(new PickupCompletedEvent(delivery.getId()));
         return RiderDeliveryResponse.withoutCustomerPhone(delivery);
     }
 

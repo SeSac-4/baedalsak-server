@@ -67,6 +67,11 @@ public class SecurityConfig {
                     "/api/v*/stores/*",
                     "/api/v*/stores/*/menus").authenticated()
 
+                // ── 고객·사장님·라이더 공용: 주문의 배달 경로 · 실시간 위치 (소유권 · 배정 여부는 delivery 가 확인) ──
+                .pathMatchers(HttpMethod.GET,
+                    "/api/v*/deliveries/by-order/*/route",
+                    "/api/v*/deliveries/by-order/*/location").hasAnyRole("CUSTOMER", "OWNER", "RIDER")
+
                 // ── 고객·사장님 공용: 주문 상세, 주문의 배달 정보 (소유권은 각 서비스가 확인) ──
                 .pathMatchers(HttpMethod.GET, "/api/v*/orders/*", "/api/v*/deliveries/by-order/*").hasAnyRole("CUSTOMER", "OWNER")
 
