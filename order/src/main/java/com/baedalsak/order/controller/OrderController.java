@@ -10,6 +10,7 @@ import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.dto.response.OrderSummaryResponse;
 import com.baedalsak.order.dto.response.PageResponse;
 import com.baedalsak.order.service.OrderAcceptService;
+import com.baedalsak.order.service.OrderCancelService;
 import com.baedalsak.order.service.OrderPaymentService;
 import com.baedalsak.order.service.OrderQueryService;
 import com.baedalsak.order.service.OrderService;
@@ -38,6 +39,7 @@ public class OrderController {
     private final OrderService orderService;
     private final OrderQueryService orderQueryService;
     private final OrderAcceptService orderAcceptService;
+    private final OrderCancelService orderCancelService;
     private final OrderPaymentService orderPaymentService;
 
     // 4.1.1 주문 생성 (장바구니 기준, 결제대기로 생성). 결제 요청까지 만들어 토스 결제창 값을 함께 준다
@@ -68,6 +70,18 @@ public class OrderController {
     public OrderDetailResponse accept(@CurrentMember LoginMember member, @PathVariable Long orderId,
                                       @Valid @RequestBody AcceptOrderRequest request) {
         return orderAcceptService.accept(member, orderId, request);
+    }
+
+    // 주문 거절 (사장님). 결제완료 → 주문거절, 환불은 뒤에서 진행. 이미 처리된 주문이면 409 ORDER_INVALID_STATUS
+    @PostMapping("/{orderId}/reject")
+    public OrderDetailResponse reject(@CurrentMember LoginMember member, @PathVariable Long orderId) {
+        return orderCancelService.reject(member, orderId);
+    }
+
+    // 주문 취소 (고객, 수락 전). 결제완료 → 주문취소, 환불은 뒤에서 진행. 이미 수락됐으면 409 ORDER_INVALID_STATUS
+    @PostMapping("/{orderId}/cancel")
+    public OrderDetailResponse cancel(@CurrentMember LoginMember member, @PathVariable Long orderId) {
+        return orderCancelService.cancel(member, orderId);
     }
 
     // 4.2.1 주문 상세 (고객·사장님 본인만)

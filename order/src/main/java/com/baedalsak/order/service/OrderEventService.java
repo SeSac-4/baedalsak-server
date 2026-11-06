@@ -6,6 +6,8 @@ import com.baedalsak.order.event.DeliveryAssignedEvent;
 import com.baedalsak.order.event.DeliveryCompletedEvent;
 import com.baedalsak.order.event.DeliveryPickedUpEvent;
 import com.baedalsak.order.event.PaymentApprovedEvent;
+import com.baedalsak.order.event.PaymentCancelFailedEvent;
+import com.baedalsak.order.event.PaymentCanceledEvent;
 import com.baedalsak.order.repository.OrderRepository;
 import com.baedalsak.order.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,26 @@ public class OrderEventService {
             default -> log.info("PaymentApproved ignored: eventId={}, orderId={}, status={}",
                     eventId, order.getId(), order.getStatus());
         }
+    }
+
+    // 환불 완료. 환불 상태는 payment 만 기록하므로 주문은 바꾸지 않고 사가를 끝낸다
+    @Transactional
+    public void onPaymentCanceled(UUID eventId, PaymentCanceledEvent event) {
+        if (alreadyProcessed(eventId, PaymentCanceledEvent.TYPE, event.orderId())) {
+            return;
+        }
+        log.info("payment canceled: eventId={}, orderId={}, paymentId={}, cancelAmount={}",
+                eventId, event.orderId(), event.paymentId(), event.cancelAmount());
+    }
+
+    // 토스가 환불을 확정 거절함. 주문은 그대로 두고 알린다 (재처리는 payment 재처리 API)
+    @Transactional
+    public void onPaymentCancelFailed(UUID eventId, PaymentCancelFailedEvent event) {
+        if (alreadyProcessed(eventId, PaymentCancelFailedEvent.TYPE, event.orderId())) {
+            return;
+        }
+        log.error("payment cancel failed: eventId={}, orderId={}, paymentId={}, tossCode={}, reason={}",
+                eventId, event.orderId(), event.paymentId(), event.tossCode(), event.reason());
     }
 
     @Transactional

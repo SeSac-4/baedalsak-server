@@ -5,6 +5,8 @@ import com.baedalsak.order.event.DeliveryAssignedEvent;
 import com.baedalsak.order.event.DeliveryCompletedEvent;
 import com.baedalsak.order.event.DeliveryPickedUpEvent;
 import com.baedalsak.order.event.PaymentApprovedEvent;
+import com.baedalsak.order.event.PaymentCancelFailedEvent;
+import com.baedalsak.order.event.PaymentCanceledEvent;
 import com.baedalsak.order.service.OrderEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
@@ -28,6 +30,18 @@ public class OrderEventListener {
     public void onPaymentApproved(PaymentApprovedEvent event,
                                   @Header(name = AmqpHeaders.MESSAGE_ID, required = false) String messageId) {
         orderEventService.onPaymentApproved(parseEventId(messageId, PaymentApprovedEvent.TYPE), event);
+    }
+
+    @RabbitListener(queues = RabbitConfig.PAYMENT_CANCELED_QUEUE)
+    public void onPaymentCanceled(PaymentCanceledEvent event,
+                                  @Header(name = AmqpHeaders.MESSAGE_ID, required = false) String messageId) {
+        orderEventService.onPaymentCanceled(parseEventId(messageId, PaymentCanceledEvent.TYPE), event);
+    }
+
+    @RabbitListener(queues = RabbitConfig.PAYMENT_CANCEL_FAILED_QUEUE)
+    public void onPaymentCancelFailed(PaymentCancelFailedEvent event,
+                                      @Header(name = AmqpHeaders.MESSAGE_ID, required = false) String messageId) {
+        orderEventService.onPaymentCancelFailed(parseEventId(messageId, PaymentCancelFailedEvent.TYPE), event);
     }
 
     @RabbitListener(queues = RabbitConfig.DELIVERY_ASSIGNED_QUEUE)
