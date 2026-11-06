@@ -97,6 +97,27 @@ public class PaymentClient {
         }
     }
 
+    // 결제 상태 일괄 조회 (최대 100건). 결제가 없는 주문은 결과에 없다. 읽기 제한은 만료 호출과 같다
+    public List<PaymentStatusResult> findStatuses(List<Long> orderIds) {
+        try {
+            List<PaymentStatusResult> results = expireClient.get()
+                    .uri(uri -> uri.path("/internal/payments").queryParam("orderIds", orderIds).build())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<PaymentStatusResult>>() {
+                    });
+            if (results == null) {
+                log.warn("payment 결제 상태 조회 응답 비어 있음");
+                throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
+            }
+            return results;
+        } catch (RestClientResponseException e) {
+            throw relayed(e, CommonErrorCode.DEPENDENCY_UNAVAILABLE);
+        } catch (RestClientException e) {
+            log.warn("payment 결제 상태 조회 실패", e);
+            throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
+        }
+    }
+
     private PaymentReady postCreate(CreatePaymentCommand command) {
         return createClient.post()
                 .uri("/internal/payments")
