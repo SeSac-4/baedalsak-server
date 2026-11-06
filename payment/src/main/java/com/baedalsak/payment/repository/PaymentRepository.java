@@ -1,6 +1,8 @@
 package com.baedalsak.payment.repository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -44,6 +46,32 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
       """)
   int clearPaymentKey(@Param("id") Long id, @Param("tossPaymentKey") String tossPaymentKey,
       @Param("requested") PaymentStatus requested);
+
+  // 고객의 진행 중 결제 요청 (#128). payment_customer_active_uq 로 고객당 최대 1건
+  Optional<Payment> findByCustomerIdAndStatus(Long customerId, PaymentStatus status);
+
+  // 조정자 점검용 일괄 조회 (#128). 결제가 없는 주문은 결과에 없다
+  List<Payment> findByOrderIdIn(Collection<Long> orderIds);
+
+  // 결제창만 열린(키 없음) 결제 요청을 만료한다 (#128). 그 사이 키가 저장됐으면 0행 — 키 저장과 동시에 와도 하나만 성공
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      UPDATE Payment p
+         SET p.status = :expired
+       WHERE p.id = :id AND p.status = :requested AND p.tossPaymentKey IS NULL
+      """)
+  int expireIfKeyless(@Param("id") Long id, @Param("requested") PaymentStatus requested,
+      @Param("expired") PaymentStatus expired);
+
+  // 토스 조회로 미승인을 확인한 결제 요청을 만료한다 (#128). 저장된 키가 그대로일 때만
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      UPDATE Payment p
+         SET p.status = :expired
+       WHERE p.id = :id AND p.status = :requested AND p.tossPaymentKey = :tossPaymentKey
+      """)
+  int expireWithKey(@Param("id") Long id, @Param("tossPaymentKey") String tossPaymentKey,
+      @Param("requested") PaymentStatus requested, @Param("expired") PaymentStatus expired);
 
   // 결제 요청됨이고 저장해 둔 paymentKey 와 같을 때만 승인 완료로 바꾼다 (#125). 0행이면 409 PAYMENT_ALREADY_APPROVED
   @Modifying(flushAutomatically = true, clearAutomatically = true)

@@ -22,7 +22,11 @@ public record OrderInternal(
         PAID,
         COOKING,
         DELIVERING,
-        DELIVERED
+        DELIVERED,
+        // order 사가 상태 (order #134). 모르는 값이면 응답을 읽지 못하므로 함께 둔다
+        PAYMENT_EXPIRED,
+        REJECTED,
+        CANCELED
     }
 
     public boolean isPendingPayment() {

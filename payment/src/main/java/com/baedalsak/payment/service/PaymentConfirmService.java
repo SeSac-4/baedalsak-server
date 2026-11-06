@@ -13,6 +13,7 @@ import com.baedalsak.payment.client.toss.TossProperties;
 import com.baedalsak.payment.domain.Payment;
 import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.request.ConfirmPaymentRequest;
+import com.baedalsak.payment.dto.request.InternalConfirmPaymentRequest;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.error.PaymentConfirmRejectedException;
 import com.baedalsak.payment.error.PaymentErrorCode;
@@ -27,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
  * 결제 승인 (#14, 설계서 'API 명세' 5.2.1). 검증 → paymentKey 저장 → 토스 승인 → APPROVED + PaymentApproved outbox.
  * 토스 호출 중에 DB 트랜잭션을 잡지 않도록 저장은 PaymentKeyRecorder · PaymentApprover 의 짧은 트랜잭션에서 한다.
  * 승인 시점에 order 를 호출하지 않는다. 주문 결제완료는 order 가 PaymentApproved 를 받아 반영한다.
+ * #128: 주문 · 결제 오케스트레이션의 조정자(order)가 부르는 내부 승인(confirmInternal)도 같은 흐름을 쓴다.
+ * 내부 승인은 DB 주문 ID 로 결제를 찾고, 토스 주문번호는 payment 에 저장된 값을 쓴다.
  *
  * <p>#125: 토스 호출 전에 paymentKey 를 저장해, 승인 응답이 유실돼도 결제 조회로 확인할 수 있게 한다.
  * <ul>
@@ -49,16 +52,35 @@ public class PaymentConfirmService {
   private final TossProperties tossProperties;
   private final Clock clock;
 
+  // 고객 API (U-06): 토스 주문번호로 결제를 찾는다. 오케스트레이션 전환 뒤 삭제 (#129)
   public PaymentDetailResponse confirm(LoginMember member, ConfirmPaymentRequest request) {
     ConfirmBudget budget = ConfirmBudget.start(clock, tossProperties.confirmBudget(), tossProperties.maxCallTime());
     Payment payment = paymentRepository.findByTossOrderId(request.orderId())
         .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-    if (!payment.getCustomerId().equals(member.id())) {
+    return confirm(payment, member.id(), request, budget);
+  }
+
+  // 내부 API (#128, 조정자 order 가 호출): DB 주문 ID 로 결제를 찾고, 토스에는 저장된 토스 주문번호를 보낸다
+  public PaymentDetailResponse confirmInternal(InternalConfirmPaymentRequest request) {
+    ConfirmBudget budget = ConfirmBudget.start(clock, tossProperties.confirmBudget(), tossProperties.maxCallTime());
+    Payment payment = paymentRepository.findByOrderId(request.orderId())
+        .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    return confirm(payment, request.customerId(),
+        new ConfirmPaymentRequest(request.paymentKey(), payment.getTossOrderId(), request.amount()), budget);
+  }
+
+  private PaymentDetailResponse confirm(Payment payment, Long customerId, ConfirmPaymentRequest request,
+      ConfirmBudget budget) {
+    if (!payment.getCustomerId().equals(customerId)) {
       throw new BusinessException(CommonErrorCode.FORBIDDEN);
     }
-    // 이미 승인됐으면 토스를 다시 부르지 않는다 (confirm 재호출은 409)
+    // 이미 승인됐으면 토스를 다시 부르지 않는다 (confirm 재호출은 409, 조정자는 성공으로 처리)
     if (payment.getStatus() == PaymentStatus.APPROVED) {
       throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_APPROVED);
+    }
+    // 결제 요청됨이 아니면(만료 등) 토스를 부르지 않는다 (#128)
+    if (payment.getStatus() != PaymentStatus.REQUESTED) {
+      throw new BusinessException(PaymentErrorCode.PAYMENT_INVALID_STATUS);
     }
     if (!payment.getAmount().equals(request.amount())) {
       throw new BusinessException(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
@@ -72,7 +94,10 @@ public class PaymentConfirmService {
     if (current.getStatus() == PaymentStatus.APPROVED) {
       throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_APPROVED);
     }
-    if (current.getStatus() != PaymentStatus.REQUESTED || current.getTossPaymentKey() == null) {
+    if (current.getStatus() != PaymentStatus.REQUESTED) {
+      throw new BusinessException(PaymentErrorCode.PAYMENT_INVALID_STATUS);   // 그 사이 만료됨 (#128)
+    }
+    if (current.getTossPaymentKey() == null) {
       throw new BusinessException(PaymentErrorCode.PAYMENT_KEY_MISMATCH);
     }
     return PaymentDetailResponse.from(resolvePreviousKey(current, request, budget));
