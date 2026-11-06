@@ -1,11 +1,13 @@
 package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.domain.Delivery;
+import com.baedalsak.delivery.location.DeliveryCreatedEvent;
 import com.baedalsak.delivery.payload.OrderAcceptedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class DeliveryCreateService {
 
     private final DeliveryRepository deliveryRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 이벤트 소비. processed_event INSERT 와 delivery INSERT 를 한 트랜잭션에 넣어,
@@ -41,5 +44,7 @@ public class DeliveryCreateService {
 
         Delivery delivery = deliveryRepository.save(event.toEntity());
         log.info("delivery created: deliveryId={}, orderId={}", delivery.getId(), delivery.getOrderId());
+        // 커밋 후 좌표 변환 (DeliveryCreatedListener). 카카오 호출을 이 트랜잭션에 넣지 않는다
+        eventPublisher.publishEvent(new DeliveryCreatedEvent(delivery.getId()));
     }
 }

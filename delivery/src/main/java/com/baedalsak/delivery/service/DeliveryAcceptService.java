@@ -7,6 +7,7 @@ import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.delivery.location.DeliveryGeocodeService;
 import com.baedalsak.delivery.payload.DeliveryAssignedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
@@ -31,15 +32,18 @@ public class DeliveryAcceptService {
     private final DeliveryRepository deliveryRepository;
     private final OutboxRepository outboxRepository;
     private final MemberClient memberClient;
+    private final DeliveryGeocodeService deliveryGeocodeService;
     private final JsonMapper jsonMapper;
     private final TransactionTemplate transactionTemplate;
 
     public DeliveryAcceptService(DeliveryRepository deliveryRepository, OutboxRepository outboxRepository,
-                                 MemberClient memberClient, JsonMapper jsonMapper,
+                                 MemberClient memberClient, DeliveryGeocodeService deliveryGeocodeService,
+                                 JsonMapper jsonMapper,
                                  PlatformTransactionManager transactionManager) {
         this.deliveryRepository = deliveryRepository;
         this.outboxRepository = outboxRepository;
         this.memberClient = memberClient;
+        this.deliveryGeocodeService = deliveryGeocodeService;
         this.jsonMapper = jsonMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -47,9 +51,11 @@ public class DeliveryAcceptService {
     /**
      * member 호출은 트랜잭션 밖에서 먼저 한다 → HTTP 대기 동안 DB 커넥션·행 잠금을 잡고 있지 않는다.
      * 실패하면 riderName 을 비운 채 배차는 성공시킨다 (설계서 '동기 호출' 탭).
+     * 생성 때 좌표를 못 채웠으면 여기서 한 번 더 시도한다 (좌표가 다 있으면 카카오를 호출하지 않음).
      */
     public RiderDeliveryResponse accept(Long deliveryId, Long riderId) {
         String riderName = memberClient.findName(riderId).orElse(null);
+        deliveryGeocodeService.fillMissingCoordinates(deliveryId);
         return transactionTemplate.execute(status -> assign(deliveryId, riderId, riderName));
     }
 

@@ -90,4 +90,24 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     int completeIfPickedUp(@Param("deliveryId") Long deliveryId,
                            @Param("riderId") Long riderId,
                            @Param("completedAt") OffsetDateTime completedAt);
+
+    /**
+     * 좌표 채우기 (배달실시간초안 5번). 비어 있는 좌표만 채우고, 이미 있는 값은 그대로 둔다 (COALESCE).
+     * 상태 · 라이더 컬럼은 건드리지 않아, 배차 수락 등과 동시에 실행돼도 서로 덮어쓰지 않는다.
+     * null 을 넘기면 그 좌표는 바뀌지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Delivery d
+               SET d.pickupLat = COALESCE(d.pickupLat, :pickupLat),
+                   d.pickupLng = COALESCE(d.pickupLng, :pickupLng),
+                   d.deliveryLat = COALESCE(d.deliveryLat, :deliveryLat),
+                   d.deliveryLng = COALESCE(d.deliveryLng, :deliveryLng)
+             WHERE d.id = :deliveryId
+            """)
+    int fillCoordinates(@Param("deliveryId") Long deliveryId,
+                        @Param("pickupLat") Double pickupLat,
+                        @Param("pickupLng") Double pickupLng,
+                        @Param("deliveryLat") Double deliveryLat,
+                        @Param("deliveryLng") Double deliveryLng);
 }

@@ -2,6 +2,7 @@ package com.baedalsak.delivery.dto;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.location.GeoPoint;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.OffsetDateTime;
@@ -10,6 +11,7 @@ import java.time.OffsetDateTime;
  * 배정된 라이더에게 보여 주는 배달 (설계서 'API 명세' RiderDelivery, 화면 R-02).
  * 배차 후라 대기 목록(WaitingDeliveryResponse)과 달리 상세 배달 주소·요청사항을 포함한다.
  * 고객 연락처는 진행 중 배달 조회(6.4.2, from)에만 싣고, 배차 수락·픽업 응답(withoutCustomerPhone)에서는 필드째 뺀다 (N4.4).
+ * pickupPoint · deliveryPoint 는 지도 표시용 좌표 {lat, lng}. 주소 변환 전이거나 실패하면 null.
  */
 public record RiderDeliveryResponse(
         Long deliveryId,
@@ -23,7 +25,9 @@ public record RiderDeliveryResponse(
         Integer deliveryFee,
         OffsetDateTime estimatedReadyAt,
         OffsetDateTime assignedAt,
-        OffsetDateTime pickedUpAt
+        OffsetDateTime pickedUpAt,
+        GeoPoint pickupPoint,
+        GeoPoint deliveryPoint
 ) {
     // 6.4.2 진행 중 배달 조회. 고객 연락처 포함
     public static RiderDeliveryResponse from(Delivery delivery) {
@@ -48,6 +52,8 @@ public record RiderDeliveryResponse(
                 delivery.getDeliveryFee(),
                 delivery.getEstimatedReadyAt(),
                 delivery.getAssignedAt(),
-                delivery.getPickedUpAt());
+                delivery.getPickedUpAt(),
+                delivery.getPickupPoint(),
+                delivery.getDeliveryPoint());
     }
 }

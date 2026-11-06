@@ -18,7 +18,7 @@ class LocationPropertiesTest {
             .withUserConfiguration(LocationConfig.class);
 
     @Test
-    void 기본값은_가상GPS_2초_도착반경_30m() {
+    void defaultsToVirtualGpsWithTwoSecondIntervalAnd30mRadius() {
         runner.run(context -> {
             DeliveryGpsProperties gps = context.getBean(DeliveryGpsProperties.class);
             assertThat(gps.isVirtual()).isTrue();
@@ -30,13 +30,13 @@ class LocationPropertiesTest {
     }
 
     @Test
-    void 모드는_환경변수로_real_로_바꾼다() {
+    void switchesToRealModeViaEnvironmentVariable() {
         runner.withPropertyValues("DELIVERY_GPS_MODE=real")
                 .run(context -> assertThat(context.getBean(DeliveryGpsProperties.class).isVirtual()).isFalse());
     }
 
     @Test
-    void 카카오_키가_없으면_꺼지고_있으면_켜진다() {
+    void kakaoIsDisabledWithoutKeyAndEnabledWithKey() {
         runner.withPropertyValues("KAKAO_REST_API_KEY=")
                 .run(context -> assertThat(context.getBean(KakaoProperties.class).enabled()).isFalse());
         runner.withPropertyValues("KAKAO_REST_API_KEY=test-key")

@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import com.baedalsak.delivery.location.GeoPoint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -72,6 +73,15 @@ public class Delivery {
     @Column(nullable = false)
     private OffsetDateTime estimatedReadyAt;
 
+    // 좌표 (V5). 카카오 주소 변환 결과. 실패했거나 V5 이전 행은 NULL — 채우는 곳은 DeliveryGeocodeService 하나
+    private Double pickupLat;
+
+    private Double pickupLng;
+
+    private Double deliveryLat;
+
+    private Double deliveryLng;
+
     private Long riderId;
 
     @Column(length = 50)
@@ -113,6 +123,27 @@ public class Delivery {
         this.deliveryFee = deliveryFee;
         this.estimatedReadyAt = estimatedReadyAt;
         this.status = DeliveryStatus.WAITING;   // 생성된 요청은 배차 대기 (6.1.1)
+    }
+
+    /**
+     * @return 픽업(가게) 좌표. 없으면 null
+     */
+    public GeoPoint getPickupPoint() {
+        return GeoPoint.ofNullable(pickupLat, pickupLng);
+    }
+
+    /**
+     * @return 배달지 좌표. 없으면 null
+     */
+    public GeoPoint getDeliveryPoint() {
+        return GeoPoint.ofNullable(deliveryLat, deliveryLng);
+    }
+
+    /**
+     * @return 픽업 · 배달지 좌표 중 하나라도 비어 있으면 true
+     */
+    public boolean isMissingCoordinates() {
+        return getPickupPoint() == null || getDeliveryPoint() == null;
     }
 
     @PrePersist
