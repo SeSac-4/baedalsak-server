@@ -33,17 +33,17 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class OrderQueryService {
 
-    // 결제가 끝나지 않았거나 만료된 주문은 사장님이 처리할 주문이 아니다
-    private static final EnumSet<OrderStatus> HIDDEN_FROM_OWNER =
+    // 결제가 끝나지 않았거나 만료된 주문은 아직 주문이 아니다. 고객 주문 내역과 사장님 목록에 보이지 않는다
+    private static final EnumSet<OrderStatus> UNPAID =
             EnumSet.of(OrderStatus.PENDING_PAYMENT, OrderStatus.PAYMENT_EXPIRED);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
 
-    // 내 주문 최신순. 한 페이지의 항목은 한 번에 조회한다
+    // 내 주문 최신순. 결제대기·결제만료는 노출하지 않는다. 한 페이지의 항목은 한 번에 조회한다
     public PageResponse<OrderSummaryResponse> getMyOrders(LoginMember member, int page, int size) {
-        Page<Order> orders = orderRepository.findAllByCustomerIdOrderByCreatedAtDescIdDesc(
-                member.id(), PageRequest.of(page, size));
+        Page<Order> orders = orderRepository.findAllByCustomerIdAndStatusNotInOrderByCreatedAtDescIdDesc(
+                member.id(), UNPAID, PageRequest.of(page, size));
         Map<Long, List<OrderItem>> items = itemsOf(orders);
         List<OrderSummaryResponse> content = orders.stream()
                 .map(order -> OrderSummaryResponse.of(order, items.getOrDefault(order.getId(), List.of())))
@@ -58,9 +58,9 @@ public class OrderQueryService {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
         }
         EnumSet<OrderStatus> visible = statuses == null || statuses.isEmpty()
-                ? EnumSet.complementOf(HIDDEN_FROM_OWNER)
+                ? EnumSet.complementOf(UNPAID)
                 : EnumSet.copyOf(statuses);
-        visible.removeAll(HIDDEN_FROM_OWNER);
+        visible.removeAll(UNPAID);
         if (visible.isEmpty()) {
             return PageResponse.of(Page.empty(PageRequest.of(page, size)), List.of());
         }
@@ -73,7 +73,7 @@ public class OrderQueryService {
         return PageResponse.of(orders, content);
     }
 
-    // 고객은 customer_id, 사장님은 owner_id 가 일치할 때만 (API 명세 35행)
+    // 고객은 customer_id, 사장님은 owner_id 가 일치할 때만 (API 명세 35행). 고객에게 결제대기·결제만료는 없는 주문 (U-09)
     public OrderDetailResponse getOrder(LoginMember member, Long orderId) {
         Order order = getExistingOrder(orderId);
         boolean allowed = switch (member.role()) {
@@ -83,6 +83,9 @@ public class OrderQueryService {
         };
         if (!allowed) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        }
+        if (member.role() == MemberRole.CUSTOMER && UNPAID.contains(order.getStatus())) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
         }
         return OrderDetailResponse.of(order, orderItemRepository.findAllByOrderIdOrderById(orderId));
     }

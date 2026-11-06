@@ -23,8 +23,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findTop100ByStatusInAndUpdatedAtGreaterThanEqualAndIdGreaterThanOrderById(
             Collection<OrderStatus> statuses, OffsetDateTime updatedSince, Long afterId);
 
-    // 내 주문 최신순 (orders_customer_idx: customer_id, created_at DESC)
-    Page<Order> findAllByCustomerIdOrderByCreatedAtDescIdDesc(Long customerId, Pageable pageable);
+    // 내 주문 최신순, 주어진 상태 제외 (orders_customer_idx: customer_id, created_at DESC)
+    Page<Order> findAllByCustomerIdAndStatusNotInOrderByCreatedAtDescIdDesc(
+            Long customerId, Collection<OrderStatus> excluded, Pageable pageable);
 
     // 가게 주문 목록 (orders_store_status_idx: store_id, status, created_at DESC)
     Page<Order> findAllByStoreIdAndOwnerIdAndStatusInOrderByCreatedAtDescIdDesc(

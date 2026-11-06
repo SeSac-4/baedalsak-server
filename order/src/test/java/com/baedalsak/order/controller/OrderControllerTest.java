@@ -787,6 +787,9 @@ class OrderControllerTest extends IntegrationTest {
             placeOrder(CUSTOMER_ID);
             placeOrder(CUSTOMER_ID);
             placeOrder(8L);
+            setStatus(1, "PAID");
+            setStatus(2, "PAID");
+            setStatus(3, "PAID");
 
             mockMvc.perform(customer(get("/v1/orders")))
                     .andExpect(status().isOk())
@@ -794,7 +797,7 @@ class OrderControllerTest extends IntegrationTest {
                     .andExpect(jsonPath("$.content[0].id").value(2))
                     .andExpect(jsonPath("$.content[1].id").value(1))
                     .andExpect(jsonPath("$.content[0].storeName").value("싹분식"))
-                    .andExpect(jsonPath("$.content[0].status").value("PENDING_PAYMENT"))
+                    .andExpect(jsonPath("$.content[0].status").value("PAID"))
                     .andExpect(jsonPath("$.content[0].items[0].menuName").value("참치김밥"))
                     .andExpect(jsonPath("$.content[0].totalAmount").value(16500))
                     .andExpect(jsonPath("$.content[0].createdAt").exists())
@@ -805,9 +808,37 @@ class OrderControllerTest extends IntegrationTest {
         }
 
         @Test
+        void 결제대기_결제만료는_목록과_전체_건수에서_빠진다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            setStatus(2, "PAYMENT_EXPIRED");
+            setStatus(3, "PAID");
+
+            mockMvc.perform(customer(get("/v1/orders")))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(3))
+                    .andExpect(jsonPath("$.totalElements").value(1));
+        }
+
+        @Test
+        void 거절_취소_주문은_목록에_보인다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "REJECTED");
+            setStatus(2, "CANCELED");
+
+            mockMvc.perform(customer(get("/v1/orders")))
+                    .andExpect(jsonPath("$.content[0].status").value("CANCELED"))
+                    .andExpect(jsonPath("$.content[1].status").value("REJECTED"));
+        }
+
+        @Test
         void 페이지_크기를_지정한다() throws Exception {
             placeOrder(CUSTOMER_ID);
             placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+            setStatus(2, "PAID");
 
             mockMvc.perform(customer(get("/v1/orders")).param("page", "1").param("size", "1"))
                     .andExpect(jsonPath("$.content.length()").value(1))
@@ -829,12 +860,35 @@ class OrderControllerTest extends IntegrationTest {
         @Test
         void 주문한_고객은_조회한다() throws Exception {
             placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
 
             mockMvc.perform(customer(get("/v1/orders/1")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(1))
                     .andExpect(jsonPath("$.items.length()").value(1))
                     .andExpect(jsonPath("$.riderName").value(nullValue()));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"PENDING_PAYMENT", "PAYMENT_EXPIRED"})
+        void 고객에게_결제대기_결제만료는_404_ORDER_NOT_FOUND(String unpaid) throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, unpaid);
+
+            mockMvc.perform(customer(get("/v1/orders/1")))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"REJECTED", "CANCELED"})
+        void 거절_취소_주문은_고객이_조회한다(String status) throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, status);
+
+            mockMvc.perform(customer(get("/v1/orders/1")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(status));
         }
 
         @Test
