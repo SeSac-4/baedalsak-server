@@ -121,6 +121,18 @@ class PaymentInternalServiceTest {
         verifyNoInteractions(tossPaymentsClient, paymentExpirer);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PaymentStatus.class, names = {"CANCEL_REQUESTED", "CANCELED"})
+    void 환불_처리_중_환불_완료도_승인됐던_결제라_APPROVED_와_승인_시각(PaymentStatus status) {
+        // #127: 반복 호출 없이 바로 응답 (조정자가 다시 명령을 보내도 payment 는 결제 상태로 무시)
+        Payment refunded = payment(status, "tgen_key");
+        ReflectionTestUtils.setField(refunded, "approvedAt", APPROVED_AT);
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(refunded));
+
+        assertThat(expire()).isEqualTo(ExpireResultResponse.approved(1005L, APPROVED_AT));
+        verifyNoInteractions(tossPaymentsClient, paymentExpirer);
+    }
+
     @Test
     void 키_없음이면_토스_조회_없이_만료() {
         given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(PaymentStatus.REQUESTED, null)));

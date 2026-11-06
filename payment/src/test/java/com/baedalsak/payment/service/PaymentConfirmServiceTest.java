@@ -339,6 +339,17 @@ class PaymentConfirmServiceTest {
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_INVALID_STATUS);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PaymentStatus.class, names = {"CANCEL_REQUESTED", "CANCELED"})
+    void 환불_처리_중_환불_완료_결제면_토스를_부르지_않고_409_PAYMENT_INVALID_STATUS(PaymentStatus status) {
+        // #127: 취소된 결제의 승인 차단 (#128 의 승인 전 상태 확인으로 막힘)
+        Payment canceled = payment(1L, 18000);
+        ReflectionTestUtils.setField(canceled, "status", status);
+        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(canceled));
+
+        assertErrorBeforeToss(PaymentErrorCode.PAYMENT_INVALID_STATUS);
+    }
+
     // ---------- 내부 승인 (#128, 조정자 order 가 호출) ----------
 
     @Test
