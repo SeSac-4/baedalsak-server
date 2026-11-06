@@ -47,6 +47,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
   // 조정자 점검용 일괄 조회 (#128). 결제가 없는 주문은 결과에 없다
   List<Payment> findByOrderIdIn(Collection<Long> orderIds);
 
+  // PG 대사 (#154): 토스 거래에 나온 결제 키의 결제
+  List<Payment> findByTossPaymentKeyIn(Collection<String> tossPaymentKeys);
+
+  // PG 대사 (#154): 대사 기간 안에 승인된 결제 (토스 거래가 없는 승인을 찾는다)
+  List<Payment> findByApprovedAtBetween(OffsetDateTime from, OffsetDateTime to);
+
   // 결제창만 열린(키 없음) 결제 요청을 만료한다 (#128). 그 사이 키가 저장됐으면 0행 — 키 저장과 동시에 와도 하나만 성공
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("""
