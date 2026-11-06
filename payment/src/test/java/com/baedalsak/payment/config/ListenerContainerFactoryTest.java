@@ -47,6 +47,20 @@ class ListenerContainerFactoryTest {
     }
 
     @Test
+    void 결제_취소_명령_컨테이너도_따로_있고_originTraceId_와_재시도가_같다() {
+        runner.run(context -> {
+            SimpleRabbitListenerContainerFactory mail =
+                    context.getBean("rabbitListenerContainerFactory", SimpleRabbitListenerContainerFactory.class);
+            SimpleRabbitListenerContainerFactory cancel =
+                    context.getBean(RabbitConfig.CANCEL_COMMAND_CONTAINER_FACTORY, SimpleRabbitListenerContainerFactory.class);
+
+            assertThat(cancel).isNotSameAs(mail);
+            assertThat(cancel.getAdviceChain()).hasSize(2);
+            assertThat(cancel.getAdviceChain()[0]).isInstanceOf(OriginTraceIdAdvice.class);
+        });
+    }
+
+    @Test
     void advice_chain_맨_앞이_originTraceId_이고_그_뒤에_재시도가_있다() {
         runner.run(context -> {
             Advice[] chain = context.getBean("rabbitListenerContainerFactory", SimpleRabbitListenerContainerFactory.class)
@@ -57,11 +71,13 @@ class ListenerContainerFactoryTest {
         });
     }
 
-    @Test
-    void 재시도_3회_내내_그리고_DLQ_로_보낼_때도_originTraceId_가_있다() {
+    // 메일 컨테이너와 결제 취소 명령 컨테이너(#127) 모두 같은 재시도 · DLQ 동작
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"rabbitListenerContainerFactory", "cancelCommandContainerFactory"})
+    void 재시도_3회_내내_그리고_DLQ_로_보낼_때도_originTraceId_가_있다(String factoryName) {
         runner.run(context -> {
             List<String> attempts = new ArrayList<>();
-            Listener listener = proxy(context.getBean(SimpleRabbitListenerContainerFactory.class), data -> {
+            Listener listener = proxy(context.getBean(factoryName, SimpleRabbitListenerContainerFactory.class), data -> {
                 attempts.add(MDC.get("originTraceId"));
                 throw new IllegalStateException("일시 오류");
             });
@@ -75,11 +91,12 @@ class ListenerContainerFactoryTest {
         });
     }
 
-    @Test
-    void 영구_오류는_재시도하지_않고_바로_DLQ() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"rabbitListenerContainerFactory", "cancelCommandContainerFactory"})
+    void 영구_오류는_재시도하지_않고_바로_DLQ(String factoryName) {
         runner.run(context -> {
             List<String> attempts = new ArrayList<>();
-            Listener listener = proxy(context.getBean(SimpleRabbitListenerContainerFactory.class), data -> {
+            Listener listener = proxy(context.getBean(factoryName, SimpleRabbitListenerContainerFactory.class), data -> {
                 attempts.add(MDC.get("originTraceId"));
                 throw new AmqpRejectAndDontRequeueException("영구 오류");
             });
