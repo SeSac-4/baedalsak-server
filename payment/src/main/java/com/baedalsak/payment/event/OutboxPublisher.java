@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Outbox 발행기 (docs 3-2·3-3, order·delivery OutboxPublisher 와 같은 동작). 1초마다 미발행 행을 baedalsak.events 로 보내고,
+ * 커밋 직후에는 OutboxImmediatePublisher 가 같은 메서드를 바로 부른다 (#151).
  * 발행 확인(ack)을 받고 return 이 없는 행만 published_at 을 기록한다. nack·시간 초과·return 이면 다음 폴링에 다시 보낸다.
  * 같은 행이 두 번 나갈 수 있으므로(ack 직후 파드 종료) 구독자 멱등이 필수다.
  * outbox.publisher.enabled=false 로 끌 수 있다 (테스트).
@@ -43,7 +44,8 @@ public class OutboxPublisher {
   private final PaymentOutboxRepository outboxRepository;
   private final RabbitTemplate rabbitTemplate;
 
-  @Scheduled(fixedDelay = 1000)
+  // 실패 · 미발행 행 재시도 (#151 뒤로는 커밋 직후 즉시 발행이 먼저 보냄). 주기는 테스트에서 늘릴 수 있게 설정값으로
+  @Scheduled(fixedDelayString = "${outbox.publisher.poll-interval-ms:1000}")
   @Transactional
   public void publishPending() {
     List<PaymentOutbox> rows = outboxRepository.findUnpublishedForUpdate(BATCH_SIZE);
