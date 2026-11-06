@@ -15,6 +15,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -81,6 +83,17 @@ public class Delivery {
     private Double deliveryLat;
 
     private Double deliveryLng;
+
+    // 경로 (V6). 픽업 후 DeliveryRouteService 가 채운다. JSON [{lat, lng}, ...]
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String routePath;
+
+    // 끝의 대문자 한 글자는 기본 이름 규칙으로 route_distancem 이 되므로 컬럼 이름을 직접 적는다
+    @Column(name = "route_distance_m")
+    private Integer routeDistanceM;
+
+    @Column(name = "route_duration_s")
+    private Integer routeDurationS;
 
     private Long riderId;
 

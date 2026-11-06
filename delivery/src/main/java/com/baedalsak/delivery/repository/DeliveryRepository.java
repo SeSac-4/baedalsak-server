@@ -110,4 +110,22 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
                         @Param("pickupLng") Double pickupLng,
                         @Param("deliveryLat") Double deliveryLat,
                         @Param("deliveryLng") Double deliveryLng);
+
+    /**
+     * 경로 저장 (배달실시간초안 6번). 아직 경로가 없을 때만 저장해, 같은 픽업이 두 번 처리돼도 처음 값을 유지한다.
+     * 경로 컬럼만 바꿔 상태 변경(완료 등)과 동시에 실행돼도 덮어쓰지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Delivery d
+               SET d.routePath = :routePath,
+                   d.routeDistanceM = :distanceM,
+                   d.routeDurationS = :durationS
+             WHERE d.id = :deliveryId
+               AND d.routePath IS NULL
+            """)
+    int saveRouteIfAbsent(@Param("deliveryId") Long deliveryId,
+                          @Param("routePath") String routePath,
+                          @Param("distanceM") Integer distanceM,
+                          @Param("durationS") Integer durationS);
 }
