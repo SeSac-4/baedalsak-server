@@ -13,5 +13,7 @@ public record CancelPaymentCommand(
 
     public static final String EVENT_TYPE = "CancelPayment";
     public static final String ROUTING_KEY = "command.payment.cancel";
+    public static final String REQUESTED_BY_OWNER = "OWNER";
+    public static final String REQUESTED_BY_CUSTOMER = "CUSTOMER";
     public static final String REQUESTED_BY_SYSTEM = "SYSTEM";
 }
