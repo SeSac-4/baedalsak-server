@@ -19,6 +19,8 @@ import com.baedalsak.order.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.ResultActions;
@@ -644,6 +646,137 @@ class OrderControllerTest extends IntegrationTest {
         private ResultActions accept(long orderId, String body) throws Exception {
             return mockMvc.perform(member(post("/v1/orders/" + orderId + "/accept"), OWNER_ID, "OWNER").content(body));
         }
+    }
+
+    @Nested
+    class 주문_거절 {
+
+        @Test
+        void 결제완료_주문을_거절하고_같은_트랜잭션에_CancelPayment_를_남긴다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            owner(post("/v1/orders/1/reject"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.status").value("REJECTED"));
+
+            assertThat(orderStatus(1)).isEqualTo("REJECTED");
+            assertCancelCommand("사장님 주문 거절", "OWNER");
+        }
+
+        @Test
+        void 거절한_주문은_수락할_수_없다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+            owner(post("/v1/orders/1/reject")).andExpect(status().isOk());
+
+            mockMvc.perform(member(post("/v1/orders/1/accept"), OWNER_ID, "OWNER").content("{\"estimatedMinutes\":20}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"PENDING_PAYMENT", "PAYMENT_EXPIRED", "COOKING", "REJECTED", "CANCELED"})
+        void 결제완료가_아니면_409_이고_환불_명령을_남기지_않는다(String current) throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, current);
+
+            owner(post("/v1/orders/1/reject"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+
+            assertThat(orderStatus(1)).isEqualTo(current);
+            assertNoCancelCommand();
+        }
+
+        @Test
+        void 사장님이_아니면_403() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            mockMvc.perform(customer(post("/v1/orders/1/reject")))
+                    .andExpect(status().isForbidden());
+
+            assertThat(orderStatus(1)).isEqualTo("PAID");
+        }
+
+        @Test
+        void 다른_가게_사장님이면_403() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            mockMvc.perform(member(post("/v1/orders/1/reject"), 999L, "OWNER"))
+                    .andExpect(status().isForbidden());
+
+            assertThat(orderStatus(1)).isEqualTo("PAID");
+            assertNoCancelCommand();
+        }
+
+        @Test
+        void 없는_주문이면_404_ORDER_NOT_FOUND() throws Exception {
+            owner(post("/v1/orders/999/reject"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+        }
+    }
+
+    @Nested
+    class 주문_취소 {
+
+        @Test
+        void 수락_전_결제완료_주문을_취소하고_같은_트랜잭션에_CancelPayment_를_남긴다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            mockMvc.perform(customer(post("/v1/orders/1/cancel")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELED"));
+
+            assertThat(orderStatus(1)).isEqualTo("CANCELED");
+            assertCancelCommand("고객 주문 취소", "CUSTOMER");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"PENDING_PAYMENT", "PAYMENT_EXPIRED", "COOKING", "DELIVERING", "DELIVERED", "CANCELED"})
+        void 결제완료가_아니면_409_이고_환불_명령을_남기지_않는다(String current) throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, current);
+
+            mockMvc.perform(customer(post("/v1/orders/1/cancel")))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+
+            assertThat(orderStatus(1)).isEqualTo(current);
+            assertNoCancelCommand();
+        }
+
+        @Test
+        void 남의_주문이면_404() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            mockMvc.perform(member(post("/v1/orders/1/cancel"), 999L, "CUSTOMER"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+
+            assertThat(orderStatus(1)).isEqualTo("PAID");
+            assertNoCancelCommand();
+        }
+    }
+
+    private void assertCancelCommand(String reason, String requestedBy) {
+        var row = jdbcTemplate.queryForMap("SELECT routing_key, aggregate_id, payload::text AS payload "
+                + "FROM orders.outbox WHERE event_type = 'CancelPayment'");
+        assertThat(row.get("routing_key")).isEqualTo("command.payment.cancel");
+        assertThat(row.get("aggregate_id")).isEqualTo(1L);
+        assertThat(row.get("payload").toString())
+                .contains("\"orderId\": 1", "\"reason\": \"" + reason + "\"", "\"requestedBy\": \"" + requestedBy + "\"");
+    }
+
+    private void assertNoCancelCommand() {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM orders.outbox WHERE event_type = 'CancelPayment'", Integer.class)).isZero();
     }
 
     @Nested

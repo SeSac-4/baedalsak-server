@@ -163,6 +163,45 @@ class OrderEventListenerTest extends RabbitMQIntegrationTest {
         assertThat(status()).isEqualTo("COOKING");
     }
 
+    @Test
+    void PaymentCanceled_는_주문을_바꾸지_않고_처리한다() throws Exception {
+        insertOrder("REJECTED");
+
+        UUID eventId = send("payment.canceled", """
+                {"paymentId":3,"orderId":1,"cancelAmount":16500,"canceledAt":"2026-11-06T12:00:00+09:00"}
+                """);
+
+        await(() -> processed(eventId));
+        assertThat(status()).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void PaymentCancelFailed_는_주문을_바꾸지_않고_처리한다() throws Exception {
+        insertOrder("CANCELED");
+
+        UUID eventId = send("payment.cancel-failed", """
+                {"paymentId":3,"orderId":1,"tossCode":"REJECT_ACCOUNT_PAYMENT","reason":"잔액 부족"}
+                """);
+
+        await(() -> processed(eventId));
+        assertThat(status()).isEqualTo("CANCELED");
+    }
+
+    @Test
+    void 환불_응답을_두_번_받아도_한_번만_처리한다() throws Exception {
+        insertOrder("REJECTED");
+        String body = """
+                {"paymentId":3,"orderId":1,"cancelAmount":16500,"canceledAt":"2026-11-06T12:00:00+09:00"}
+                """;
+        UUID eventId = send("payment.canceled", body);
+        await(() -> processed(eventId));
+
+        send("payment.canceled", body, eventId);
+        Thread.sleep(1_000);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders.processed_event", Integer.class)).isOne();
+    }
+
     private static String paymentApproved(int amount) {
         return paymentApproved(amount, OffsetDateTime.now());
     }
