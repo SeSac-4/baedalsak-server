@@ -20,9 +20,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
   // 주문당 결제 1건 (order_id UNIQUE)
   Optional<Payment> findByOrderId(Long orderId);
 
-  // 결제 승인 요청의 orderId = 토스 orderId (toss_order_id UNIQUE)
-  Optional<Payment> findByTossOrderId(String tossOrderId);
-
   // 토스 승인 호출 전에 paymentKey 를 저장한다 (#125). 비어 있거나 같은 키일 때만, 0행이면 다른 키가 있거나 결제 요청됨이 아님
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("""

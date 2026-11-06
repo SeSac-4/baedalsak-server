@@ -102,13 +102,6 @@ logging:
     format:
       console: logstash               # JSON 로그 (docs 6-1)
 
-# [내부] 동기 호출 (설계서 '동기 호출' 탭). 주소는 환경 변수로만 받는다 (docs 3번, 하드코딩 금지)
-internal-api:
-  order-url: ${ORDER_SERVICE_URL:http://localhost:8082}    # 로컬 VSCode 실행 시 order 포트
-  # 응답이 없으면 무한정 기다리지 않고 503 DEPENDENCY_UNAVAILABLE 로 끊는다
-  connect-timeout: 1s
-  read-timeout: 2s
-
 # 결제완료 메일 (#37, docs 10번). PaymentApproved 를 자기 메일 큐로 받아 SES 로 동기 발송
 #   템플릿은 resources/mail/{이름}.html — 앱이 {{변수}} 를 채우고 <title> 을 메일 제목으로 씀 (SES 는 발송만)
 #   local 프로필은 발송 대신 렌더링 결과를 로그로 (docs 10-4). 자격 증명은 두지 않음 — AWS 는 Pod Identity

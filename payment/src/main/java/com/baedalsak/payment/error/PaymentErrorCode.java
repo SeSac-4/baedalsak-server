@@ -6,13 +6,12 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * payment 도메인 에러 코드 (설계서 'API 명세' 에러표). 공통 코드는 CommonErrorCode 를 쓴다.
- * ORDER_NOT_FOUND·ORDER_INVALID_STATUS 는 order 내부 API 검증 결과를 payment 가 응답할 때 쓴다.
+ * ORDER_INVALID_STATUS 는 내부 결제 요청 생성에서 같은 주문의 결제가 이미 만료 · 승인됐을 때 쓴다 (#128).
  */
 @Getter
 @RequiredArgsConstructor
 public enum PaymentErrorCode implements ErrorCode {
 
-    ORDER_NOT_FOUND(404, "주문을 찾을 수 없습니다."),
     ORDER_INVALID_STATUS(409, "결제할 수 없는 주문 상태입니다."),
     PAYMENT_NOT_FOUND(404, "결제 정보를 찾을 수 없습니다."),
     PAYMENT_AMOUNT_MISMATCH(400, "결제 금액이 주문 금액과 일치하지 않습니다."),

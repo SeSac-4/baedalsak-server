@@ -7,9 +7,7 @@ import com.baedalsak.common.error.GlobalExceptionHandler;
 import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.response.PageResponse;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
-import com.baedalsak.payment.service.PaymentConfirmService;
 import com.baedalsak.payment.service.PaymentQueryService;
-import com.baedalsak.payment.service.PaymentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,8 +37,7 @@ class PaymentQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        PaymentController controller = new PaymentController(mock(PaymentService.class),
-                mock(PaymentConfirmService.class), paymentQueryService);
+        PaymentController controller = new PaymentController(paymentQueryService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(new LoginMemberArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())

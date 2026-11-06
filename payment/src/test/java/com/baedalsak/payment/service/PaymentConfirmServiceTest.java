@@ -1,7 +1,5 @@
 package com.baedalsak.payment.service;
 
-import com.baedalsak.common.auth.LoginMember;
-import com.baedalsak.common.auth.MemberRole;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.common.error.ErrorCode;
@@ -53,7 +51,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith(MockitoExtension.class)
 class PaymentConfirmServiceTest {
 
-    static final LoginMember CUSTOMER = new LoginMember(1L, MemberRole.CUSTOMER);
+    // 조정자(order)의 내부 승인 요청 (#129: 고객 승인 API 삭제 뒤 승인 입구는 내부 승인 하나). 토스에는 저장된 토스 주문번호 BDS-1005-1
+    static final InternalConfirmPaymentRequest INTERNAL = new InternalConfirmPaymentRequest(1005L, 1L, "tgen_key", 18000);
     static final OffsetDateTime APPROVED_AT = OffsetDateTime.parse("2026-10-26T15:30:00+09:00");
     static final ConfirmPaymentRequest REQUEST = new ConfirmPaymentRequest("tgen_key", "BDS-1005-1", 18000);
     static final TossConfirmResponse TOSS = toss("tgen_key", "DONE", 18000);
@@ -88,14 +87,14 @@ class PaymentConfirmServiceTest {
 
     @Test
     void 결제가_없으면_404_PAYMENT_NOT_FOUND() {
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.empty());
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.empty());
 
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_NOT_FOUND);
     }
 
     @Test
     void 남의_결제면_403_FORBIDDEN() {
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(payment(2L, 18000)));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(2L, 18000)));
 
         assertErrorBeforeToss(CommonErrorCode.FORBIDDEN);
     }
@@ -104,14 +103,14 @@ class PaymentConfirmServiceTest {
     void 이미_승인됐으면_토스를_부르지_않고_409() {
         Payment payment = payment(1L, 18000);
         ReflectionTestUtils.setField(payment, "status", PaymentStatus.APPROVED);
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment));
 
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_ALREADY_APPROVED);
     }
 
     @Test
     void 금액이_다르면_400_PAYMENT_AMOUNT_MISMATCH() {
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(payment(1L, 15000)));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(1L, 15000)));
 
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_AMOUNT_MISMATCH);
     }
@@ -125,7 +124,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.confirm(REQUEST)).willReturn(TOSS);
         given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
 
-        PaymentDetailResponse response = paymentConfirmService.confirm(CUSTOMER, REQUEST);
+        PaymentDetailResponse response = paymentConfirmService.confirmInternal(INTERNAL);
 
         InOrder order = inOrder(paymentKeyRecorder, tossPaymentsClient, paymentApprover);
         order.verify(paymentKeyRecorder).reserve(7L, "tgen_key");
@@ -169,7 +168,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.confirm(REQUEST)).willThrow(noResponse()).willReturn(TOSS);
         given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
 
-        assertThat(paymentConfirmService.confirm(CUSTOMER, REQUEST).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(paymentConfirmService.confirmInternal(INTERNAL).status()).isEqualTo(PaymentStatus.APPROVED);
         verify(tossPaymentsClient, times(2)).confirm(REQUEST);
     }
 
@@ -202,7 +201,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.confirm(REQUEST))
                 .willThrow(TossApiException.rejected(403, "REJECT_CARD_COMPANY", "카드사에서 승인을 거절했습니다."));
 
-        assertThatThrownBy(() -> paymentConfirmService.confirm(CUSTOMER, REQUEST))
+        assertThatThrownBy(() -> paymentConfirmService.confirmInternal(INTERNAL))
                 .isInstanceOfSatisfying(PaymentConfirmRejectedException.class, e -> {
                     assertThat(e.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_CONFIRM_REJECTED);
                     assertThat(e.responseMessage()).isEqualTo("카드사에서 승인을 거절했습니다.");
@@ -219,7 +218,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.confirm(REQUEST))
                 .willThrow(TossApiException.rejected(400, "CARD_PROCESSING_ERROR", "카드사에서 오류가 발생했습니다."));
 
-        assertThatThrownBy(() -> paymentConfirmService.confirm(CUSTOMER, REQUEST))
+        assertThatThrownBy(() -> paymentConfirmService.confirmInternal(INTERNAL))
                 .isInstanceOf(PaymentConfirmRejectedException.class);
         verify(paymentKeyRecorder).clear(7L, "tgen_key", "CARD_PROCESSING_ERROR");
     }
@@ -231,7 +230,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.getPayment("tgen_key", "BDS-1005-1")).willReturn(TOSS);
         given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
 
-        assertThat(paymentConfirmService.confirm(CUSTOMER, REQUEST).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(paymentConfirmService.confirmInternal(INTERNAL).status()).isEqualTo(PaymentStatus.APPROVED);
         verify(tossPaymentsClient, times(1)).confirm(REQUEST);
     }
 
@@ -287,7 +286,7 @@ class PaymentConfirmServiceTest {
         given(tossPaymentsClient.confirm(REQUEST)).willReturn(TOSS);
         given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
 
-        assertThat(paymentConfirmService.confirm(CUSTOMER, REQUEST).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(paymentConfirmService.confirmInternal(INTERNAL).status()).isEqualTo(PaymentStatus.APPROVED);
 
         InOrder order = inOrder(paymentKeyRecorder, tossPaymentsClient);
         order.verify(tossPaymentsClient).confirm(PREVIOUS_REQUEST);
@@ -334,7 +333,7 @@ class PaymentConfirmServiceTest {
     void 만료된_결제면_토스를_부르지_않고_409_PAYMENT_INVALID_STATUS() {
         Payment expired = payment(1L, 18000);
         ReflectionTestUtils.setField(expired, "status", PaymentStatus.EXPIRED);
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(expired));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(expired));
 
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_INVALID_STATUS);
     }
@@ -345,7 +344,7 @@ class PaymentConfirmServiceTest {
         // #127: 취소된 결제의 승인 차단 (#128 의 승인 전 상태 확인으로 막힘)
         Payment canceled = payment(1L, 18000);
         ReflectionTestUtils.setField(canceled, "status", status);
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(canceled));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(canceled));
 
         assertErrorBeforeToss(PaymentErrorCode.PAYMENT_INVALID_STATUS);
     }
@@ -414,7 +413,7 @@ class PaymentConfirmServiceTest {
         }).willReturn(TOSS);
         given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
 
-        assertThat(paymentConfirmService.confirm(CUSTOMER, REQUEST).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(paymentConfirmService.confirmInternal(INTERNAL).status()).isEqualTo(PaymentStatus.APPROVED);
         verify(tossPaymentsClient, times(2)).confirm(REQUEST);
     }
 
@@ -448,7 +447,7 @@ class PaymentConfirmServiceTest {
     // ---------- 준비 ----------
 
     private void givenRequestedPayment() {
-        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(payment(1L, 18000)));
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(1L, 18000)));
     }
 
     private void givenReservedPayment() {
@@ -472,7 +471,7 @@ class PaymentConfirmServiceTest {
     }
 
     private void assertError(ErrorCode expected) {
-        assertThatThrownBy(() -> paymentConfirmService.confirm(CUSTOMER, REQUEST))
+        assertThatThrownBy(() -> paymentConfirmService.confirmInternal(INTERNAL))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(expected);

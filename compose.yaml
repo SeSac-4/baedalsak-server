@@ -207,7 +207,6 @@ services:
       DB_USER: payment_svc
       DB_SCHEMA: payment
       TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:?.env 파일에 TOSS_SECRET_KEY 를 추가해 주세요} # 토스 결제 승인
-      ORDER_SERVICE_URL: http://order:8080
 
   # 배달
   delivery:
