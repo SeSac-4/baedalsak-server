@@ -12,6 +12,7 @@ import com.baedalsak.payment.client.toss.TossProperties;
 import com.baedalsak.payment.domain.Payment;
 import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.request.ConfirmPaymentRequest;
+import com.baedalsak.payment.dto.request.InternalConfirmPaymentRequest;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.error.PaymentConfirmRejectedException;
 import com.baedalsak.payment.error.PaymentErrorCode;
@@ -325,6 +326,56 @@ class PaymentConfirmServiceTest {
 
         assertError(PaymentErrorCode.PAYMENT_KEY_MISMATCH);
         verify(paymentApprover, never()).approve(anyLong(), any());
+    }
+
+    // ---------- 결제 요청됨이 아닌 결제 (#128) ----------
+
+    @Test
+    void 만료된_결제면_토스를_부르지_않고_409_PAYMENT_INVALID_STATUS() {
+        Payment expired = payment(1L, 18000);
+        ReflectionTestUtils.setField(expired, "status", PaymentStatus.EXPIRED);
+        given(paymentRepository.findByTossOrderId("BDS-1005-1")).willReturn(Optional.of(expired));
+
+        assertErrorBeforeToss(PaymentErrorCode.PAYMENT_INVALID_STATUS);
+    }
+
+    // ---------- 내부 승인 (#128, 조정자 order 가 호출) ----------
+
+    @Test
+    void 내부_승인은_DB_주문_ID로_찾아_저장된_토스_주문번호로_승인한다() {
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(1L, 18000)));
+        given(paymentKeyRecorder.reserve(7L, "tgen_key")).willReturn(true);
+        given(tossPaymentsClient.confirm(REQUEST)).willReturn(TOSS);
+        given(paymentApprover.approve(7L, TOSS)).willReturn(approvedPayment());
+
+        PaymentDetailResponse response = paymentConfirmService.confirmInternal(
+                new InternalConfirmPaymentRequest(1005L, 1L, "tgen_key", 18000));
+
+        assertThat(response.status()).isEqualTo(PaymentStatus.APPROVED);
+        verify(tossPaymentsClient).confirm(REQUEST);   // 토스에는 BDS-1005-1
+    }
+
+    @Test
+    void 내부_승인_고객이_다르면_403_FORBIDDEN_토스_미호출() {
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.of(payment(2L, 18000)));
+
+        assertThatThrownBy(() -> paymentConfirmService.confirmInternal(
+                        new InternalConfirmPaymentRequest(1005L, 1L, "tgen_key", 18000)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CommonErrorCode.FORBIDDEN);
+        verifyNoInteractions(paymentKeyRecorder, tossPaymentsClient, paymentApprover);
+    }
+
+    @Test
+    void 내부_승인_결제가_없으면_404_PAYMENT_NOT_FOUND() {
+        given(paymentRepository.findByOrderId(1005L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentConfirmService.confirmInternal(
+                        new InternalConfirmPaymentRequest(1005L, 1L, "tgen_key", 18000)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
     }
 
     // ---------- 시간 예산 (15초, 토스 호출 전 남은 시간이 7초 미만이면 부르지 않음) ----------
