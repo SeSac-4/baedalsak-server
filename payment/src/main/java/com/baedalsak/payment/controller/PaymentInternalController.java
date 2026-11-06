@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,8 +18,10 @@ import com.baedalsak.payment.dto.response.ExpireResultResponse;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.dto.response.PaymentReadyResponse;
 import com.baedalsak.payment.dto.response.PaymentStatusResponse;
+import com.baedalsak.payment.dto.response.RecoverResultResponse;
 import com.baedalsak.payment.service.PaymentConfirmService;
 import com.baedalsak.payment.service.PaymentInternalService;
+import com.baedalsak.payment.service.PaymentRecoverService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -28,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * payment [내부] API (#128, 설계서 'API 명세' 5.1.1 · 5.2.1 · 결제 상태 조회 · 만료).
- * 주문 · 결제 오케스트레이션 사가의 조정자(order)만 부른다. gateway 라우트가 없어 외부에서 닿지 않는다(/internal/** 404).
+ * 주문 · 결제 오케스트레이션 사가의 조정자(order)만 부른다. 재처리(#153)는 사람이 port-forward 로 부른다. gateway 라우트가 없어 외부에서 닿지 않는다(/internal/** 404).
  */
 @Validated
 @RestController
@@ -38,6 +41,7 @@ public class PaymentInternalController {
 
   private final PaymentInternalService paymentInternalService;
   private final PaymentConfirmService paymentConfirmService;
+  private final PaymentRecoverService paymentRecoverService;
 
   // 결제 요청 생성 (주문 생성 직후). 같은 주문이면 기존 결제 요청을 돌려준다
   @PostMapping
@@ -62,5 +66,11 @@ public class PaymentInternalController {
   @PostMapping("/expire")
   public List<ExpireResultResponse> expire(@Valid @RequestBody ExpirePaymentRequest request) {
     return paymentInternalService.expire(request.orderIds());
+  }
+
+  // 재처리 (#153). 결제 하나를 토스에 조회해 환불 처리 중 상태를 정리. 본문 없음
+  @PostMapping("/{paymentId}/recover")
+  public RecoverResultResponse recover(@PathVariable Long paymentId) {
+    return paymentRecoverService.recover(paymentId);
   }
 }

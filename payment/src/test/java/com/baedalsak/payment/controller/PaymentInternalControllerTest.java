@@ -6,8 +6,10 @@ import com.baedalsak.payment.dto.request.InternalConfirmPaymentRequest;
 import com.baedalsak.payment.dto.response.ExpireResultResponse;
 import com.baedalsak.payment.dto.response.PaymentReadyResponse;
 import com.baedalsak.payment.dto.response.PaymentStatusResponse;
+import com.baedalsak.payment.dto.response.RecoverResultResponse;
 import com.baedalsak.payment.service.PaymentConfirmService;
 import com.baedalsak.payment.service.PaymentInternalService;
+import com.baedalsak.payment.service.PaymentRecoverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -27,17 +29,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * payment 내부 API (#128). 경로 · 요청 검증(400) · 응답 필드. 로그인 헤더 없이 부른다(서비스 간 호출)
+ * payment 내부 API (#128, 재처리 #153). 경로 · 요청 검증(400) · 응답 필드. 로그인 헤더 없이 부른다(서비스 간 호출)
  */
 class PaymentInternalControllerTest {
 
     PaymentInternalService paymentInternalService = mock(PaymentInternalService.class);
     PaymentConfirmService paymentConfirmService = mock(PaymentConfirmService.class);
+    PaymentRecoverService paymentRecoverService = mock(PaymentRecoverService.class);
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new PaymentInternalController(paymentInternalService, paymentConfirmService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new PaymentInternalController(
+                        paymentInternalService, paymentConfirmService, paymentRecoverService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -109,5 +113,21 @@ class PaymentInternalControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         verifyNoInteractions(paymentInternalService);
+    }
+
+    @Test
+    void 재처리는_본문_없이_부르고_전후_상태와_한_일을_돌려준다() throws Exception {
+        given(paymentRecoverService.recover(7L)).willReturn(new RecoverResultResponse(7L, 1005L,
+                PaymentStatus.CANCEL_REQUESTED, "CANCELED", RecoverResultResponse.Action.RECORDED_CANCELED,
+                PaymentStatus.CANCELED));
+
+        mockMvc.perform(post("/internal/payments/7/recover"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentId").value(7))
+                .andExpect(jsonPath("$.orderId").value(1005))
+                .andExpect(jsonPath("$.before").value("CANCEL_REQUESTED"))
+                .andExpect(jsonPath("$.tossStatus").value("CANCELED"))
+                .andExpect(jsonPath("$.action").value("RECORDED_CANCELED"))
+                .andExpect(jsonPath("$.after").value("CANCELED"));
     }
 }
