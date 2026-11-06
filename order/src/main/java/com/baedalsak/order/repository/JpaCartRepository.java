@@ -5,6 +5,7 @@ import com.baedalsak.order.domain.CartItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,6 +47,11 @@ public class JpaCartRepository implements CartRepository {
     @Override
     public void deleteItem(CartItem item) {
         items.delete(item);
+    }
+
+    @Override
+    public void deleteItems(Long cartId, Collection<Long> menuIds) {
+        items.deleteAllByCartIdAndMenuIdIn(cartId, menuIds);
     }
 
     @Override

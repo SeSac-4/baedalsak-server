@@ -1,5 +1,6 @@
 package com.baedalsak.order.service;
 
+import com.baedalsak.order.domain.Order;
 import com.baedalsak.order.domain.OrderStatus;
 import com.baedalsak.order.event.DeliveryAssignedEvent;
 import com.baedalsak.order.event.DeliveryCompletedEvent;
@@ -27,29 +28,37 @@ import java.util.UUID;
 public class OrderEventService {
 
     private final OrderRepository orderRepository;
+    private final OrderPaymentTransitions orderPaymentTransitions;
     private final ProcessedEventRepository processedEventRepository;
     private final Clock clock;
 
-    // 결제대기 → 결제완료. 금액 불일치는 에러 로그 후 ack (상태 전이 탭 5행)
+    // 승인 알림 (안전망). 결제대기면 10분 규칙, 이미 결제만료면 돈만 나간 것이므로 환불. 금액 불일치는 에러 로그 후 ack (상태 전이 탭 5행)
     @Transactional
     public void onPaymentApproved(UUID eventId, PaymentApprovedEvent event) {
         if (alreadyProcessed(eventId, PaymentApprovedEvent.TYPE, event.orderId())) {
             return;
         }
-        if (orderRepository.markPaid(event.orderId(), event.amount(), now(),
-                OrderStatus.PENDING_PAYMENT, OrderStatus.PAID) == 1) {
-            log.info("order paid: orderId={}, paymentId={}", event.orderId(), event.paymentId());
+        Order order = orderRepository.findById(event.orderId()).orElse(null);
+        if (order == null) {
+            log.error("PaymentApproved for unknown order: eventId={}, orderId={}", eventId, event.orderId());
             return;
         }
-        orderRepository.findById(event.orderId()).ifPresentOrElse(order -> {
-            if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
-                log.error("PaymentApproved amount mismatch: eventId={}, orderId={}, orderAmount={}, paidAmount={}",
-                        eventId, order.getId(), order.getTotalAmount(), event.amount());
-            } else {
-                log.info("PaymentApproved ignored: eventId={}, orderId={}, status={}",
-                        eventId, order.getId(), order.getStatus());
+        switch (order.getStatus()) {
+            case PENDING_PAYMENT -> {
+                if (!order.getTotalAmount().equals(event.amount())) {
+                    log.error("PaymentApproved amount mismatch: eventId={}, orderId={}, orderAmount={}, paidAmount={}",
+                            eventId, order.getId(), order.getTotalAmount(), event.amount());
+                    return;
+                }
+                orderPaymentTransitions.applyApproval(order, event.paymentId(), event.approvedAt());
             }
-        }, () -> log.error("PaymentApproved for unknown order: eventId={}, orderId={}", eventId, event.orderId()));
+            case PAYMENT_EXPIRED -> {
+                log.warn("PaymentApproved for expired order: eventId={}, orderId={}", eventId, order.getId());
+                orderPaymentTransitions.requestRefund(order.getId(), event.paymentId());
+            }
+            default -> log.info("PaymentApproved ignored: eventId={}, orderId={}, status={}",
+                    eventId, order.getId(), order.getStatus());
+        }
     }
 
     @Transactional
