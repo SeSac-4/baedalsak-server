@@ -126,3 +126,10 @@ toss:
   connect-timeout: 2s                # 연결에 2초 넘게 걸리면 이미 장애
   read-timeout: 5s                   # 승인 · 조회 응답 대기
   confirm-budget: 15s                # 결제 확인 전체 예산: 남은 시간이 호출 1건 최대(7초)보다 적으면 토스를 부르지 않고 502 (결과 모름)
+  cancel-read-timeout: 60s           # 결제 취소 응답 대기 (토스 '타임아웃': 결제 처리 API 최대 60초, #127)
+
+# 결제 취소 명령 처리 (#127)
+payment-cancel:
+  default-reason: 주문 취소에 따른 결제 취소   # 명령에 사유가 없을 때 토스 cancelReason
+  stale-after: 30m                    # 이 시간 넘게 환불 처리 중(PENDING)이면 ERROR 로그 · 지표 (조정자는 24시간 이내만 확인)
+  stale-check-interval: 10m           # 감시 주기

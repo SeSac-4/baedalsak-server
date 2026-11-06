@@ -58,6 +58,29 @@ class RabbitConfigTest {
         assertThat(RabbitConfig.isRetryable(new IllegalStateException("throttled"))).isTrue();
     }
 
+    @Test
+    void 결제_취소_명령_큐는_quorum_deliveryLimit_3_이고_command_payment_cancel_을_받는다() {
+        Declarables declarables = rabbitConfig.cancelCommandQueues();
+
+        assertThat(queue(declarables, "payment.command.cancel").getArguments())
+                .containsEntry("x-queue-type", "quorum")
+                .containsEntry("x-delivery-limit", 3)
+                .containsEntry("x-dead-letter-exchange", "payment.dlx")
+                .containsEntry("x-dead-letter-routing-key", "payment.command.cancel");
+        assertThat(queue(declarables, "payment.command.cancel.dlq").getArguments())
+                .containsEntry("x-queue-type", "quorum");
+        assertThat(declarables.getDeclarablesByType(Binding.class))
+                .anySatisfy(b -> {
+                    assertThat(b.getExchange()).isEqualTo("baedalsak.events");
+                    assertThat(b.getRoutingKey()).isEqualTo("command.payment.cancel");
+                    assertThat(b.getDestination()).isEqualTo("payment.command.cancel");
+                })
+                .anySatisfy(b -> {
+                    assertThat(b.getExchange()).isEqualTo("payment.dlx");
+                    assertThat(b.getDestination()).isEqualTo("payment.command.cancel.dlq");
+                });
+    }
+
     private static Queue queue(Declarables declarables, String name) {
         return declarables.getDeclarablesByType(Queue.class).stream()
                 .filter(q -> q.getName().equals(name))

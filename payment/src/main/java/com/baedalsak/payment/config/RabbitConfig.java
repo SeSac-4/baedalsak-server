@@ -33,6 +33,10 @@ public class RabbitConfig {
   public static final String EVENTS_EXCHANGE = "baedalsak.events";
   public static final String DEAD_LETTER_EXCHANGE = "payment.dlx";
   public static final String PAYMENT_APPROVED_MAIL_QUEUE = "payment.mail.payment-approved";
+  // 결제 취소 명령 큐 (#127). 명령은 조정자(order)가 보내고 받는 payment 가 선언한다
+  public static final String CANCEL_COMMAND_QUEUE = "payment.command.cancel";
+  public static final String CANCEL_COMMAND_ROUTING_KEY = "command.payment.cancel";
+  public static final String CANCEL_COMMAND_CONTAINER_FACTORY = "cancelCommandContainerFactory";
 
   // 전 서비스 공용 topic exchange. 이미 있으면 그대로 쓴다
   @Bean
@@ -61,6 +65,21 @@ public class RabbitConfig {
         BindingBuilder.bind(dlq).to(new DirectExchange(DEAD_LETTER_EXCHANGE)).with(PAYMENT_APPROVED_MAIL_QUEUE));
   }
 
+  // 결제 취소 명령 큐 + DLQ (#127, 둘 다 quorum). deliveryLimit 3 · DLX 는 메일 큐와 같음. DLQ 는 수동 확인 (재처리 API 대상)
+  @Bean
+  Declarables cancelCommandQueues() {
+    Queue main = QueueBuilder.durable(CANCEL_COMMAND_QUEUE)
+        .quorum()
+        .deliveryLimit(3)
+        .deadLetterExchange(DEAD_LETTER_EXCHANGE)
+        .deadLetterRoutingKey(CANCEL_COMMAND_QUEUE)
+        .build();
+    Queue dlq = QueueBuilder.durable(CANCEL_COMMAND_QUEUE + ".dlq").quorum().build();
+    return new Declarables(main, dlq,
+        BindingBuilder.bind(main).to(new TopicExchange(EVENTS_EXCHANGE)).with(CANCEL_COMMAND_ROUTING_KEY),
+        BindingBuilder.bind(dlq).to(new DirectExchange(DEAD_LETTER_EXCHANGE)).with(CANCEL_COMMAND_QUEUE));
+  }
+
   // 메시지 본문 JSON (Jackson 3). 모르는 필드는 무시 → 발행 쪽이 필드를 추가해도 소비 쪽이 깨지지 않음
   @Bean
   MessageConverter jsonMessageConverter() {
@@ -76,11 +95,30 @@ public class RabbitConfig {
   SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
       SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
       ObjectProvider<ContainerCustomizer<SimpleMessageListenerContainer>> containerCustomizer) {
+    return newContainerFactory(configurer, connectionFactory, containerCustomizer);
+  }
+
+  // @Bean 메서드끼리 서로 부르면 같은 빈을 돌려받으므로, 팩토리는 매번 이 메서드로 새로 만든다
+  private static SimpleRabbitListenerContainerFactory newContainerFactory(
+      SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
+      ObjectProvider<ContainerCustomizer<SimpleMessageListenerContainer>> containerCustomizer) {
     SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
     configurer.configure(factory, connectionFactory);
     containerCustomizer.ifUnique(factory::setContainerCustomizer);
     factory.setAdviceChain(withOriginTraceId(factory.getAdviceChain()));
     return factory;
+  }
+
+  /**
+   * 결제 취소 명령 전용 컨테이너 팩토리 (#127). 메일 리스너와 컨테이너를 나눠, 토스 취소(최대 60초)가 메일 발송을 막지 않게 한다.
+   * 설정은 메일과 같다(application.yml listener: prefetch 1 · 동시성 1 · 3회 시도 후 DLQ, 영구 오류는 바로 DLQ, originTraceId).
+   * 팀 규칙의 업무 큐 값(prefetch 10)과 다른 이유: 환불은 한 결제씩 토스를 부르고, 파드가 죽어도 재전달을 1건으로 줄이기 위함.
+   */
+  @Bean(name = CANCEL_COMMAND_CONTAINER_FACTORY)
+  SimpleRabbitListenerContainerFactory cancelCommandContainerFactory(
+      SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
+      ObjectProvider<ContainerCustomizer<SimpleMessageListenerContainer>> containerCustomizer) {
+    return newContainerFactory(configurer, connectionFactory, containerCustomizer);
   }
 
   // 기존 advice chain(재시도 등) 앞에 OriginTraceIdAdvice 를 붙인다. 앞에 둔 advice 가 바깥에서 감싼다

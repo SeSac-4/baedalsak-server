@@ -1,5 +1,6 @@
 package com.baedalsak.payment.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -12,18 +13,21 @@ import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.payment.domain.Payment;
+import com.baedalsak.payment.domain.PaymentCancel;
 import com.baedalsak.payment.domain.PaymentStatus;
 import com.baedalsak.payment.dto.response.PageResponse;
 import com.baedalsak.payment.dto.response.PaymentDetailResponse;
 import com.baedalsak.payment.dto.response.PaymentSummaryResponse;
 import com.baedalsak.payment.error.PaymentErrorCode;
+import com.baedalsak.payment.repository.PaymentCancelRepository;
 import com.baedalsak.payment.repository.PaymentRepository;
 
 import lombok.RequiredArgsConstructor;
 
 /**
  * 결제 내역 조회 (#15·#93, 설계서 'API 명세' 5.4.1·5.4.2). 자기 DB 만으로 응답하고 다른 서비스를 호출하지 않는다.
- * 목록은 승인 완료만, 상세(결제 ID·주문 ID)는 결제 요청 상태도 조회한다.
+ * 목록은 실제로 결제된 승인 완료 · 환불 처리 중 · 환불 완료(#127), 상세(결제 ID·주문 ID)는 결제 요청 상태도 조회한다.
+ * 환불 처리 중 · 환불 완료면 상세에 취소 금액 · 사유 · 시각을 함께 준다 (#127).
  * 상세는 결제 ID(U-10·U-06 → U-11)와 주문 ID(U-09 주문 상세 → U-11) 두 경로로 찾는다.
  */
 @Service
@@ -34,11 +38,16 @@ public class PaymentQueryService {
   // 승인 시각 최신순, 같으면 id 역순 (#93)
   private static final Sort LATEST_APPROVED_FIRST = Sort.by(Sort.Direction.DESC, "approvedAt", "id");
 
-  private final PaymentRepository paymentRepository;
+  // 내 결제 목록에 보이는 상태: 실제로 결제된 것 (#127 환불 포함)
+  private static final List<PaymentStatus> PAID_STATUSES =
+      List.of(PaymentStatus.APPROVED, PaymentStatus.CANCEL_REQUESTED, PaymentStatus.CANCELED);
 
-  // 내 결제 목록 (#93): 실제로 결제된 승인 완료만, 최근 결제가 위로. 결제창만 열고 닫은 결제 요청은 제외
+  private final PaymentRepository paymentRepository;
+  private final PaymentCancelRepository paymentCancelRepository;
+
+  // 내 결제 목록 (#93 · #127): 승인 완료 · 환불 처리 중 · 환불 완료, 최근 결제가 위로. 결제창만 열고 닫은 결제 요청 · 만료는 제외
   public PageResponse<PaymentSummaryResponse> getMyPayments(LoginMember member, int page, int size) {
-    Page<Payment> payments = paymentRepository.findByCustomerIdAndStatus(member.id(), PaymentStatus.APPROVED,
+    Page<Payment> payments = paymentRepository.findByCustomerIdAndStatusIn(member.id(), PAID_STATUSES,
         PageRequest.of(page, size, LATEST_APPROVED_FIRST));
     return PageResponse.of(payments, payments.map(PaymentSummaryResponse::from).getContent());
   }
@@ -57,6 +66,13 @@ public class PaymentQueryService {
     if (!payment.getCustomerId().equals(member.id())) {
       throw new BusinessException(CommonErrorCode.FORBIDDEN);
     }
-    return PaymentDetailResponse.from(payment);
+    PaymentCancel cancel = isRefund(payment)
+        ? paymentCancelRepository.findTopByPaymentIdOrderByIdDesc(payment.getId()).orElse(null)
+        : null;
+    return PaymentDetailResponse.from(payment, cancel);
+  }
+
+  private static boolean isRefund(Payment payment) {
+    return payment.getStatus() == PaymentStatus.CANCEL_REQUESTED || payment.getStatus() == PaymentStatus.CANCELED;
   }
 }

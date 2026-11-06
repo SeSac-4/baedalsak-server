@@ -81,7 +81,8 @@ public class PaymentInternalService {
 
   private ExpireResultResponse expire(Payment payment) {
     switch (payment.getStatus()) {
-      case APPROVED -> {
+      // 환불 처리 중 · 환불 완료(#127)도 승인됐던 결제 → 승인 정보 응답 (조정자의 10분 규칙이 다시 명령을 보내도 payment 는 상태로 무시)
+      case APPROVED, CANCEL_REQUESTED, CANCELED -> {
         return ExpireResultResponse.approved(payment.getOrderId(), payment.getApprovedAt());
       }
       case EXPIRED -> {

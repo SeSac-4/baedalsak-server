@@ -23,9 +23,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
   // 결제 승인 요청의 orderId = 토스 orderId (toss_order_id UNIQUE)
   Optional<Payment> findByTossOrderId(String tossOrderId);
 
-  // 내 결제 목록: 고객의 결제 중 한 상태만 (#93 승인 완료만). 정렬은 pageable 로 받는다
-  Page<Payment> findByCustomerIdAndStatus(Long customerId, PaymentStatus status, Pageable pageable);
-
   // 토스 승인 호출 전에 paymentKey 를 저장한다 (#125). 비어 있거나 같은 키일 때만, 0행이면 다른 키가 있거나 결제 요청됨이 아님
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("""
@@ -72,6 +69,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
       """)
   int expireWithKey(@Param("id") Long id, @Param("tossPaymentKey") String tossPaymentKey,
       @Param("requested") PaymentStatus requested, @Param("expired") PaymentStatus expired);
+
+  // 내 결제 목록 (#127): 승인 완료 · 환불 처리 중 · 환불 완료처럼 실제로 결제된 상태들
+  Page<Payment> findByCustomerIdAndStatusIn(Long customerId, Collection<PaymentStatus> statuses, Pageable pageable);
+
+  // 상태 전이 한 칸 (#127): from 일 때만 to 로. 0행이면 다른 처리가 먼저 바꿈 (승인 완료 → 환불 처리 중 → 환불 완료)
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("UPDATE Payment p SET p.status = :to WHERE p.id = :id AND p.status = :from")
+  int changeStatus(@Param("id") Long id, @Param("from") PaymentStatus from, @Param("to") PaymentStatus to);
 
   // 결제 요청됨이고 저장해 둔 paymentKey 와 같을 때만 승인 완료로 바꾼다 (#125). 0행이면 409 PAYMENT_ALREADY_APPROVED
   @Modifying(flushAutomatically = true, clearAutomatically = true)
