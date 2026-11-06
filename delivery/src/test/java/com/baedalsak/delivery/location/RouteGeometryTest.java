@@ -77,4 +77,30 @@ class RouteGeometryTest {
         double fromB = RouteGeometry.distanceM(B, C) + RouteGeometry.distanceM(C, D);
         assertThat(RouteGeometry.remainingM(PATH, offRoad)).isCloseTo(fromB, within(1.0));
     }
+
+    @Test
+    void remainingIgnoresSegmentsAlreadyPassedOnLoopingRoute() {
+        // ㄷ자 경로: 동쪽 → 남쪽 짧게 → 서쪽으로 되돌아옴. 되돌아오는 길은 처음 길과 약 11m 떨어져 있다
+        GeoPoint start = new GeoPoint(37.5450, 127.0550);
+        GeoPoint east = new GeoPoint(37.5450, 127.0570);
+        GeoPoint turn = new GeoPoint(37.5449, 127.0570);
+        GeoPoint end = new GeoPoint(37.5449, 127.0550);
+        List<GeoPoint> loop = List.of(start, east, turn, end);
+        double length = RouteGeometry.lengthM(loop);
+        // 되돌아오는 길을 달리는 중인데 GPS 가 처음 길 쪽으로 튐 (처음 길 약 3m, 되돌아오는 길 약 8m)
+        GeoPoint returning = new GeoPoint(37.54497, 127.0560);
+        double passed = RouteGeometry.distanceM(start, east) + RouteGeometry.distanceM(east, turn);
+
+        double naive = RouteGeometry.remainingM(loop, returning);
+        double guided = RouteGeometry.remainingM(loop, returning, passed - 50);
+
+        double expected = RouteGeometry.distanceM(turn, end) / 2;
+        assertThat(naive).isGreaterThan(length / 2);              // 처음 길에 붙어 남은 거리가 크게 나온다
+        assertThat(guided).isCloseTo(expected, within(3.0));      // 지나온 구간을 빼면 정확하다
+    }
+
+    @Test
+    void remainingIsZeroWhenStartBeyondRoute() {
+        assertThat(RouteGeometry.remainingM(PATH, D, 1_000_000)).isZero();
+    }
 }

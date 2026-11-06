@@ -15,6 +15,10 @@ spring:
     name: delivery
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  task:
+    scheduling:
+      pool:
+        size: 2                       # 가상 GPS(2초)가 Redis · DB 를 기다리는 동안 outbox 발행(1초)이 멈추지 않게 분리
   datasource:
     # docs 4번: RDS 인스턴스 1개 안에 서비스별 DB (DB 이름 = schema 이름). DB=delivery, 계정=delivery_svc
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:delivery}?currentSchema=${DB_SCHEMA:delivery}

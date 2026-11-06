@@ -78,6 +78,19 @@ public final class RouteGeometry {
      * @return 남은 거리 (m)
      */
     public static double remainingM(List<GeoPoint> path, GeoPoint current) {
+        return remainingM(path, current, 0);
+    }
+
+    /**
+     * 남은 거리. fromAlongM(출발점에서 이미 지나온 거리)보다 앞쪽 구간에서만 가장 가까운 지점을 찾는다.
+     * 경로가 자기 자신 근처를 다시 지나가는 곳(ㄷ자 길 등)에서 지나온 구간에 잘못 붙어 남은 거리가 늘어나는 것을 막는다.
+     *
+     * @param path       경로 좌표
+     * @param current    현재 위치
+     * @param fromAlongM 이 거리 이전에 끝나는 구간은 보지 않는다 (m). 0 이면 전체
+     * @return 남은 거리 (m)
+     */
+    public static double remainingM(List<GeoPoint> path, GeoPoint current, double fromAlongM) {
         double best = Double.MAX_VALUE;
         double bestAlong = 0;
         double along = 0;
@@ -85,7 +98,15 @@ public final class RouteGeometry {
             GeoPoint from = path.get(i - 1);
             GeoPoint to = path.get(i);
             double segment = distanceM(from, to);
+            if (along + segment < fromAlongM) {
+                along += segment;
+                continue;
+            }
             double ratio = projectionRatio(from, to, current);
+            if (segment > 0 && along < fromAlongM) {
+                // fromAlongM 이 걸친 구간은 그 지점보다 뒤로 투영하지 않는다
+                ratio = Math.max(ratio, (fromAlongM - along) / segment);
+            }
             GeoPoint projected = new GeoPoint(from.lat() + (to.lat() - from.lat()) * ratio,
                     from.lng() + (to.lng() - from.lng()) * ratio);
             double offset = distanceM(current, projected);
@@ -95,7 +116,8 @@ public final class RouteGeometry {
             }
             along += segment;
         }
-        return Math.max(0, along - bestAlong);
+        // 모든 구간이 fromAlongM 앞에 있으면(이미 끝) 0
+        return best == Double.MAX_VALUE ? 0 : Math.max(0, along - bestAlong);
     }
 
     // 구간 from→to 위에 current 를 수선으로 내린 위치 (0 = from, 1 = to). 경도는 위도에 맞춰 줄여 평면으로 본다
