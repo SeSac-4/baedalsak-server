@@ -4,6 +4,7 @@
 
 # [내부] 동기 호출 주소 (docs 3번) — 코드에 하드코딩하지 않는다
 #   MEMBER_SERVICE_URL (로컬 기본 http://localhost:8085)
+# 외부 API: KAKAO_REST_API_KEY (카카오 로컬 · 모빌리티 REST 키, 🔒 .env 에만). 비어 있으면 카카오 호출을 건너뛴다
 
 server:
   port: ${SERVER_PORT:8084}          # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
@@ -38,6 +39,15 @@ spring:
           time_zone: Asia/Seoul       # KST
   jackson:
     time-zone: Asia/Seoul             # API 응답 시각 KST (+09:00)
+  data:
+    redis:
+      # 캐시 Redis (docs 3번 REDIS_CACHE_*). 라이더 위치처럼 지워져도 다시 채워지는 값만 넣는다 — allkeys-lru
+      #   로컬 PC 접속 localhost:6380 (compose redis-cache), 컨테이너 안 redis-cache:6379, AWS 는 인프라가 주입
+      #   비밀번호는 아직 Secret 에 없을 수 있어 빈 값 허용 (없으면 인증 없이 접속)
+      host: ${REDIS_CACHE_HOST:localhost}
+      port: ${REDIS_CACHE_PORT:6380}
+      password: ${REDIS_CACHE_PASSWORD:}
+      timeout: 1s                     # 위치 조회 · 저장이 Redis 장애로 오래 묶이지 않게
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -66,6 +76,11 @@ spring:
           max-interval: 10s
 
 management:
+  health:
+    redis:
+      # 캐시 Redis 가 없거나 끊겨도 배달 API(수락·픽업·완료)는 동작해야 하므로 readiness 에서 뺀다
+      #   (위치만 잠시 안 보이는 것으로 끝나게). 캐시 Redis 배포 후에도 그대로 둔다
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -96,3 +111,21 @@ delivery-mail:
     picked-up-customer: delivery-picked-up-customer # 고객 배달시작 메일
     completed-customer: delivery-completed-customer # 고객 배달완료 메일
     completed-owner: delivery-completed-owner       # 사장님 배달완료 메일
+
+# 실시간 위치 (배달실시간초안 2번). 라이더 위치는 캐시 Redis 에, 경로는 DB 에 둔다
+#   mode: virtual = 서버가 길찾기 경로를 따라 가상 GPS 를 움직임 / real = 앱이 PUT /v1/deliveries/{id}/location 으로 보냄
+#   도착해도 자동 완료하지 않는다 — 라이더가 배달 완료 버튼을 직접 누른다
+delivery-gps:
+  mode: ${DELIVERY_GPS_MODE:virtual}
+  update-interval: 2s               # 가상 GPS 갱신 · 화면 폴링 주기
+  speed-kmh: 50                     # 가상 GPS 이동 속도 (도심 오토바이 평균)
+  arrival-radius-m: 30              # 배달지까지 이 거리 안이면 도착 플래그
+  location-ttl: 30m                 # 위치 키 수명. 완료 시 바로 지우고, 지우지 못해도 이 시간 뒤 사라짐
+
+# 카카오 REST API (주소 → 좌표, 길찾기). 실패하면 빈 값 → 가게와 배달지를 직선으로 잇는다
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}   # 🔒 기본값 없음. 비어 있으면 호출하지 않음
+  local-base-url: https://dapi.kakao.com
+  mobility-base-url: https://apis-navi.kakaomobility.com
+  connect-timeout: 500ms
+  read-timeout: 2s
