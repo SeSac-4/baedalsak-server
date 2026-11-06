@@ -1,6 +1,7 @@
 package com.baedalsak.payment.repository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -27,16 +28,16 @@ public interface PaymentCancelRepository extends JpaRepository<PaymentCancel, Lo
   @Query("UPDATE PaymentCancel c SET c.attemptCount = c.attemptCount + 1 WHERE c.id = :id")
   int increaseAttempt(@Param("id") Long id);
 
-  // 진행 중일 때만 완료로 (0행이면 다른 처리가 먼저 끝냄)
+  // 진행 중(재처리에서는 확정 거절 뒤 포함)일 때만 완료로 (0행이면 다른 처리가 먼저 끝냄)
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("""
       UPDATE PaymentCancel c
          SET c.status = :done, c.tossTransactionKey = :transactionKey, c.canceledAt = :canceledAt
-       WHERE c.id = :id AND c.status = :pending
+       WHERE c.id = :id AND c.status IN :from
       """)
   int markDone(@Param("id") Long id, @Param("transactionKey") String transactionKey,
       @Param("canceledAt") OffsetDateTime canceledAt,
-      @Param("pending") PaymentCancelStatus pending, @Param("done") PaymentCancelStatus done);
+      @Param("from") Collection<PaymentCancelStatus> from, @Param("done") PaymentCancelStatus done);
 
   // 진행 중일 때만 실패로 (토스 확정 거절)
   @Modifying(flushAutomatically = true, clearAutomatically = true)
