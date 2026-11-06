@@ -11,6 +11,10 @@ spring:
     name: order
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  task:
+    scheduling:
+      pool:
+        size: 2                       # 점검이 payment 응답을 기다리는 동안 outbox 발행이 멈추지 않게 분리
   datasource:
     # docs 4번: RDS 인스턴스 1개 안에 서비스별 DB (DB 이름 = schema 이름). DB=orders, 계정=order_svc
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:orders}?currentSchema=${DB_SCHEMA:orders}

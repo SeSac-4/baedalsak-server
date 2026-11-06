@@ -19,7 +19,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 // 발행기·리스너는 RabbitMQ 가 필요해서 기본은 끈다. RabbitMQIntegrationTest 를 상속한 테스트만 켠다
 @TestPropertySource(properties = {
         "outbox.publisher.enabled=false",
-        "spring.rabbitmq.listener.simple.auto-startup=false"
+        "spring.rabbitmq.listener.simple.auto-startup=false",
+        "order.payment-check.enabled=false"
 })
 public abstract class IntegrationTest {
 

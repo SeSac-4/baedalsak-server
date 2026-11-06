@@ -11,10 +11,13 @@ import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -43,6 +46,32 @@ class PaymentClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
         paymentClient = new PaymentClient(restClient, restClient, restClient);
+    }
+
+    @Test
+    void 결제_상태를_조회한다_모르는_상태값도_파싱한다() {
+        server.expect(requestTo("http://payment/internal/payments?orderIds=1&orderIds=2")).andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        [{"orderId":1,"paymentId":3,"status":"APPROVED","amount":16500,
+                          "approvedAt":"2026-11-05T10:00:00+09:00"},
+                         {"orderId":2,"paymentId":4,"status":"CANCEL_REQUESTED","amount":9000,"approvedAt":null}]
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(paymentClient.findStatuses(List.of(1L, 2L)))
+                .extracting(PaymentStatusResult::orderId, PaymentStatusResult::status)
+                .containsExactly(tuple(1L, "APPROVED"), tuple(2L, "CANCEL_REQUESTED"));
+    }
+
+    @Test
+    void 결제_상태_조회가_응답하지_않으면_503() {
+        server.expect(requestTo("http://payment/internal/payments?orderIds=1")).andRespond(request -> {
+            throw new ResourceAccessException("timeout", new IOException("timeout"));
+        });
+
+        assertThatThrownBy(() -> paymentClient.findStatuses(List.of(1L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode().name())
+                .isEqualTo("DEPENDENCY_UNAVAILABLE");
     }
 
     @Test
