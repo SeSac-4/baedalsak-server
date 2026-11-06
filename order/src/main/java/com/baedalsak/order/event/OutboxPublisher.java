@@ -22,8 +22,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Outbox 발행기 (docs 3-2, delivery OutboxPublisher 와 같은 동작). 1초마다 미발행 행을 baedalsak.events 로 보내고,
+ * Outbox 발행기 (docs 3-2, delivery OutboxPublisher 와 같은 동작). 미발행 행을 baedalsak.events 로 보내고,
  * 발행 확인(ack)을 받고 return 이 없는 행만 published_at 을 기록한다. nack·시간 초과·return 이면 다음 폴링에 다시 보낸다.
+ * 커밋 직후에는 OutboxImmediatePublisher 가 바로 부르고, 1초 폴링은 재시도를 맡는다.
  * 같은 행이 두 번 나갈 수 있으므로(ack 직후 파드 종료) 구독자 멱등이 필수다.
  * outbox.publisher.enabled=false 로 끌 수 있다 (테스트).
  */
@@ -40,7 +41,7 @@ public class OutboxPublisher {
     private final OutboxRepository outboxRepository;
     private final RabbitTemplate rabbitTemplate;
 
-    @Scheduled(fixedDelay = 1000)
+    @Scheduled(fixedDelayString = "${outbox.publisher.poll-interval-ms:1000}")
     @Transactional
     public void publishPending() {
         List<OutboxEvent> rows = outboxRepository.findUnpublishedForUpdate(BATCH_SIZE);
