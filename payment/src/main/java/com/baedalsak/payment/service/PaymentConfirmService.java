@@ -3,7 +3,6 @@ package com.baedalsak.payment.service;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.payment.client.toss.TossApiException;
@@ -27,9 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 결제 승인 (#14, 설계서 'API 명세' 5.2.1). 검증 → paymentKey 저장 → 토스 승인 → APPROVED + PaymentApproved outbox.
  * 토스 호출 중에 DB 트랜잭션을 잡지 않도록 저장은 PaymentKeyRecorder · PaymentApprover 의 짧은 트랜잭션에서 한다.
- * 승인 시점에 order 를 호출하지 않는다. 주문 결제완료는 order 가 PaymentApproved 를 받아 반영한다.
- * #128: 주문 · 결제 오케스트레이션의 조정자(order)가 부르는 내부 승인(confirmInternal)도 같은 흐름을 쓴다.
- * 내부 승인은 DB 주문 ID 로 결제를 찾고, 토스 주문번호는 payment 에 저장된 값을 쓴다.
+ * 승인 입구는 주문 · 결제 오케스트레이션의 조정자(order)가 부르는 내부 승인(confirmInternal) 하나다 (#128, 고객 승인 API 는 #129 에서 삭제).
+ * DB 주문 ID 로 결제를 찾고, 토스 주문번호는 payment 에 저장된 값을 쓴다. 승인 결과는 동기 응답 + PaymentApproved(메일 · 안전망).
  *
  * <p>#125: 토스 호출 전에 paymentKey 를 저장해, 승인 응답이 유실돼도 결제 조회로 확인할 수 있게 한다.
  * <ul>
@@ -51,14 +49,6 @@ public class PaymentConfirmService {
   private final PaymentKeyRecorder paymentKeyRecorder;
   private final TossProperties tossProperties;
   private final Clock clock;
-
-  // 고객 API (U-06): 토스 주문번호로 결제를 찾는다. 오케스트레이션 전환 뒤 삭제 (#129)
-  public PaymentDetailResponse confirm(LoginMember member, ConfirmPaymentRequest request) {
-    ConfirmBudget budget = ConfirmBudget.start(clock, tossProperties.confirmBudget(), tossProperties.maxCallTime());
-    Payment payment = paymentRepository.findByTossOrderId(request.orderId())
-        .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-    return confirm(payment, member.id(), request, budget);
-  }
 
   // 내부 API (#128, 조정자 order 가 호출): DB 주문 ID 로 결제를 찾고, 토스에는 저장된 토스 주문번호를 보낸다
   public PaymentDetailResponse confirmInternal(InternalConfirmPaymentRequest request) {

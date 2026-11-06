@@ -30,7 +30,7 @@ public class Payment {
   @Column(nullable = false, updatable = false)
   private Long customerId;
 
-  // 이하 5개: 결제 요청 생성 시 order 내부 API(/internal/orders) 응답 스냅샷 (PaymentApproved 페이로드·결제완료 메일 수신자)
+  // 이하 5개: 결제 요청 생성 때 조정자(order)가 넘긴 값의 스냅샷 (#128, PaymentApproved 페이로드·결제완료 메일 수신자)
   @Column(nullable = false, updatable = false)
   private Long ownerId;
 
