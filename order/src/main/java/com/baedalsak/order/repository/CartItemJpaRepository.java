@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,4 +18,8 @@ interface CartItemJpaRepository extends JpaRepository<CartItem, Long> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM CartItem i WHERE i.cartId = :cartId")
     void deleteAllByCartId(Long cartId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM CartItem i WHERE i.cartId = :cartId AND i.menuId IN :menuIds")
+    void deleteAllByCartIdAndMenuIdIn(Long cartId, Collection<Long> menuIds);
 }

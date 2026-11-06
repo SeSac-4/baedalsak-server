@@ -193,6 +193,7 @@ services:
       # [내부] 동기 호출 (설계서 '동기 호출' 탭)
       STORE_SERVICE_URL: http://store:8080
       MEMBER_SERVICE_URL: http://member:8080
+      PAYMENT_SERVICE_URL: http://payment:8080
 
   # 결제
   payment:

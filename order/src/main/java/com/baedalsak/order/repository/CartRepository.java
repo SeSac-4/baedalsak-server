@@ -3,6 +3,7 @@ package com.baedalsak.order.repository;
 import com.baedalsak.order.domain.Cart;
 import com.baedalsak.order.domain.CartItem;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +23,8 @@ public interface CartRepository {
     CartItem saveItem(CartItem item);
 
     void deleteItem(CartItem item);
+
+    void deleteItems(Long cartId, Collection<Long> menuIds);
 
     // 항목까지 함께 삭제 (cart_item ON DELETE CASCADE)
     void deleteCart(Cart cart);

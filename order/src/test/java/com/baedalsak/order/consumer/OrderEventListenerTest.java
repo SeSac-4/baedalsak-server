@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -99,6 +100,44 @@ class OrderEventListenerTest extends RabbitMQIntegrationTest {
     }
 
     @Test
+    void PaymentApproved_가_승인_후_10분을_넘으면_결제만료와_자동_환불() throws Exception {
+        insertOrder("PENDING_PAYMENT");
+
+        UUID eventId = send("payment.approved", paymentApproved(16500, OffsetDateTime.now().minusMinutes(11)));
+
+        await(() -> processed(eventId));
+        assertThat(status()).isEqualTo("PAYMENT_EXPIRED");
+        assertCancelPaymentCommand();
+    }
+
+    @Test
+    void 결제만료_주문에_온_PaymentApproved_는_환불한다() throws Exception {
+        insertOrder("PAYMENT_EXPIRED");
+
+        UUID eventId = send("payment.approved", paymentApproved(16500));
+
+        await(() -> processed(eventId));
+        assertThat(status()).isEqualTo("PAYMENT_EXPIRED");
+        assertCancelPaymentCommand();
+    }
+
+    @Test
+    void PaymentApproved_로_결제완료되면_주문_항목을_장바구니에서_지운다() throws Exception {
+        insertOrder("PENDING_PAYMENT");
+        jdbcTemplate.update("INSERT INTO orders.order_item (order_id, menu_id, menu_name, price, quantity) "
+                + "VALUES (1, 1, '참치김밥', 4500, 3)");
+        jdbcTemplate.update("INSERT INTO orders.cart (customer_id, store_id, store_name, delivery_fee, min_order_amount) "
+                + "VALUES (7, 1, '싹분식', 3000, 12000)");
+        jdbcTemplate.update("INSERT INTO orders.cart_item (cart_id, menu_id, menu_name, price, quantity) "
+                + "VALUES (1, 1, '참치김밥', 4500, 3), (1, 2, '라볶이', 6000, 1)");
+
+        UUID eventId = send("payment.approved", paymentApproved(16500));
+
+        await(() -> processed(eventId));
+        assertThat(jdbcTemplate.queryForList("SELECT menu_id FROM orders.cart_item", Long.class)).containsExactly(2L);
+    }
+
+    @Test
     void 기대한_이전_상태가_아니면_무시하고_ack() throws Exception {
         // 조리중이 아닌데 픽업 이벤트
         insertOrder("PAID");
@@ -125,10 +164,14 @@ class OrderEventListenerTest extends RabbitMQIntegrationTest {
     }
 
     private static String paymentApproved(int amount) {
+        return paymentApproved(amount, OffsetDateTime.now());
+    }
+
+    private static String paymentApproved(int amount, OffsetDateTime approvedAt) {
         return """
                 {"paymentId":3,"orderId":1,"customerId":7,"ownerId":10,"storeId":1,"storeName":"싹분식",
-                 "amount":%d,"approvedAt":"2026-10-26T12:00:00+09:00","customerEmail":"c@x","ownerEmail":"o@x"}
-                """.formatted(amount);
+                 "amount":%d,"approvedAt":"%s","customerEmail":"c@x","ownerEmail":"o@x"}
+                """.formatted(amount, approvedAt);
     }
 
     private static String pickedUp() {
@@ -162,6 +205,15 @@ class OrderEventListenerTest extends RabbitMQIntegrationTest {
                 VALUES (7, 1, 10, '싹분식', ?, '서울시 마포구 2', '연남동', '서울시 마포구 1', '010-1234-5678',
                     'customer@baedalsak.click', 'owner@baedalsak.click', 13500, 3000, 16500)
                 """, status);
+    }
+
+    private void assertCancelPaymentCommand() {
+        var row = jdbcTemplate.queryForMap("SELECT routing_key, aggregate_id, payload::text AS payload "
+                + "FROM orders.outbox WHERE event_type = 'CancelPayment'");
+        assertThat(row.get("routing_key")).isEqualTo("command.payment.cancel");
+        assertThat(row.get("aggregate_id")).isEqualTo(1L);
+        assertThat(row.get("payload").toString())
+                .contains("\"orderId\": 1", "\"paymentId\": 3", "\"requestedBy\": \"SYSTEM\"");
     }
 
     private String status() {

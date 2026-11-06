@@ -3,11 +3,14 @@ package com.baedalsak.order.controller;
 import com.baedalsak.common.auth.CurrentMember;
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.order.dto.request.AcceptOrderRequest;
+import com.baedalsak.order.dto.request.ConfirmOrderPaymentRequest;
 import com.baedalsak.order.dto.request.CreateOrderRequest;
+import com.baedalsak.order.dto.response.OrderCreatedResponse;
 import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.dto.response.OrderSummaryResponse;
 import com.baedalsak.order.dto.response.PageResponse;
 import com.baedalsak.order.service.OrderAcceptService;
+import com.baedalsak.order.service.OrderPaymentService;
 import com.baedalsak.order.service.OrderQueryService;
 import com.baedalsak.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -35,13 +38,21 @@ public class OrderController {
     private final OrderService orderService;
     private final OrderQueryService orderQueryService;
     private final OrderAcceptService orderAcceptService;
+    private final OrderPaymentService orderPaymentService;
 
-    // 4.1.1 주문 생성 (장바구니 기준, 결제대기로 생성)
+    // 4.1.1 주문 생성 (장바구니 기준, 결제대기로 생성). 결제 요청까지 만들어 토스 결제창 값을 함께 준다
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderDetailResponse create(@CurrentMember LoginMember member,
+    public OrderCreatedResponse create(@CurrentMember LoginMember member,
                                       @Valid @RequestBody CreateOrderRequest request) {
         return orderService.create(member, request);
+    }
+
+    // 결제 확인 (U-06). 가게·메뉴 재확인 → payment 승인 → 결제완료. 결과를 모르면 502 (같은 paymentKey 로 다시 시도)
+    @PostMapping("/{orderId}/payment/confirm")
+    public OrderDetailResponse confirmPayment(@CurrentMember LoginMember member, @PathVariable Long orderId,
+                                              @Valid @RequestBody ConfirmOrderPaymentRequest request) {
+        return orderPaymentService.confirm(member, orderId, request);
     }
 
     // 4.2.1 내 주문 목록 (최신순, page 는 0부터, 기본 size 20·최대 100)

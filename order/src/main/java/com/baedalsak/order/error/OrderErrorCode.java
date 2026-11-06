@@ -19,7 +19,9 @@ public enum OrderErrorCode implements ErrorCode {
     CART_EMPTY(400, "장바구니가 비어 있습니다."),
     MIN_ORDER_AMOUNT_NOT_MET(400, "최소 주문 금액을 충족하지 못했습니다."),
     ORDER_NOT_FOUND(404, "주문을 찾을 수 없습니다."),
-    ORDER_INVALID_STATUS(409, "현재 주문 상태에서는 처리할 수 없습니다.");
+    ORDER_INVALID_STATUS(409, "현재 주문 상태에서는 처리할 수 없습니다."),
+    // payment 승인 결과를 모름 (응답 없음 등). payment 와 같은 코드·문구 → U-06 다시 시도
+    PAYMENT_GATEWAY_ERROR(502, "결제 확인 중 오류. 다시 시도해 주세요");
 
     private final int status;
     private final String message;
