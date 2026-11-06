@@ -3,11 +3,18 @@ package com.baedalsak.order.controller;
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.common.error.ErrorCode;
+import com.baedalsak.order.client.ConfirmPaymentCommand;
+import com.baedalsak.order.client.CreatePaymentCommand;
 import com.baedalsak.order.client.MemberClient;
 import com.baedalsak.order.client.MemberInternal;
 import com.baedalsak.order.client.MenuInternal;
+import com.baedalsak.order.client.PaymentClient;
+import com.baedalsak.order.client.PaymentExpireResult;
+import com.baedalsak.order.client.PaymentReady;
 import com.baedalsak.order.client.StoreClient;
 import com.baedalsak.order.client.StoreInternal;
+import com.baedalsak.order.error.OrderErrorCode;
 import com.baedalsak.order.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -17,15 +24,20 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +63,9 @@ class OrderControllerTest extends IntegrationTest {
     @MockitoBean
     MemberClient memberClient;
 
+    @MockitoBean
+    PaymentClient paymentClient;
+
     // 장바구니 담기·주문 생성 때 store 가 돌려줄 메뉴 (테스트마다 바꿀 수 있음)
     List<MenuInternal> storeMenus;
 
@@ -60,6 +75,11 @@ class OrderControllerTest extends IntegrationTest {
                 new MenuInternal(1L, "참치김밥", 4500, MenuInternal.SaleStatus.ON_SALE),
                 new MenuInternal(2L, "라볶이", 6000, MenuInternal.SaleStatus.ON_SALE));
         openStore(3000, 12000);
+        given(paymentClient.create(any())).willAnswer(call -> {
+            CreatePaymentCommand command = call.getArgument(0);
+            return new PaymentReady(100L + command.orderId(), "toss-" + command.orderId(), command.orderName(),
+                    command.amount());
+        });
         given(storeClient.getMenus(eq(1L), anyCollection())).willAnswer(call -> {
             Collection<Long> ids = call.getArgument(1);
             return Optional.of(storeMenus.stream().filter(m -> ids.contains(m.id())).toList());
@@ -74,7 +94,7 @@ class OrderControllerTest extends IntegrationTest {
     class 주문_생성 {
 
         @Test
-        void 장바구니로_결제대기_주문을_만들고_장바구니를_비운다() throws Exception {
+        void 장바구니로_결제대기_주문과_결제_요청을_만들고_장바구니는_그대로() throws Exception {
             addToCart(1L, 2);
             addToCart(2L, 1);
 
@@ -95,11 +115,18 @@ class OrderControllerTest extends IntegrationTest {
                     .andExpect(jsonPath("$.riderRequest").value("문 앞에 두세요"))
                     .andExpect(jsonPath("$.estimatedReadyAt").value(nullValue()))
                     .andExpect(jsonPath("$.createdAt").exists())
+                    .andExpect(jsonPath("$.payment.paymentId").value(101))
+                    .andExpect(jsonPath("$.payment.tossOrderId").value("toss-1"))
+                    .andExpect(jsonPath("$.payment.orderName").value("참치김밥 외 1건"))
+                    .andExpect(jsonPath("$.payment.amount").value(18000))
                     // 고객 연락처는 내려주지 않는다 (O-03)
                     .andExpect(jsonPath("$.customerPhone").doesNotExist());
 
+            // 장바구니는 결제 완료 때 비운다
             mockMvc.perform(customer(get("/v1/cart")))
-                    .andExpect(jsonPath("$.cannotOrderReason").value("CART_EMPTY"));
+                    .andExpect(jsonPath("$.items.length()").value(2));
+            then(paymentClient).should().create(new CreatePaymentCommand(1L, 18000, CUSTOMER_ID, OWNER_ID, 1L, "싹분식",
+                    "customer@baedalsak.click", "owner@baedalsak.click", "참치김밥 외 1건"));
         }
 
         @Test
@@ -191,6 +218,33 @@ class OrderControllerTest extends IntegrationTest {
         }
 
         @Test
+        void 결제_요청이_거절되면_같은_코드로_응답하고_주문은_결제만료_장바구니는_그대로() throws Exception {
+            addToCart(1L, 3);
+            willThrow(new BusinessException(TestErrorCode.PAYMENT_IN_PROGRESS)).given(paymentClient).create(any());
+            given(paymentClient.expire(1L)).willReturn(new PaymentExpireResult(1L, PaymentExpireResult.Result.NONE, null));
+
+            createOrder()
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_IN_PROGRESS"));
+
+            assertThat(orderStatus(1)).isEqualTo("PAYMENT_EXPIRED");
+            mockMvc.perform(customer(get("/v1/cart")))
+                    .andExpect(jsonPath("$.items.length()").value(1));
+        }
+
+        @Test
+        void 결제_요청_실패_뒤_만료_호출도_실패하면_결제대기로_둔다() throws Exception {
+            addToCart(1L, 3);
+            willThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE)).given(paymentClient).create(any());
+            given(paymentClient.expire(1L))
+                    .willThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE));
+
+            createOrder().andExpect(status().isServiceUnavailable());
+
+            assertThat(orderStatus(1)).isEqualTo("PENDING_PAYMENT");
+        }
+
+        @Test
         void 배달_주소가_없으면_400() throws Exception {
             addToCart(1L, 3);
 
@@ -208,6 +262,180 @@ class OrderControllerTest extends IntegrationTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.errors[0].field").value("deliveryDong"));
+        }
+    }
+
+    @Nested
+    class 결제_확인 {
+
+        static final String CONFIRM_BODY = "{\"paymentKey\":\"key-1\",\"amount\":16500}";
+
+        @Test
+        void 승인되면_결제완료이고_주문_항목만_장바구니에서_지운다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            addToCart(2L, 1);   // 결제창에 있는 동안 더 담은 메뉴
+
+            confirm(1)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.status").value("PAID"))
+                    .andExpect(jsonPath("$.items[0].menuName").value("참치김밥"));
+
+            then(paymentClient).should().confirm(new ConfirmPaymentCommand(1L, CUSTOMER_ID, "key-1", 16500));
+            mockMvc.perform(customer(get("/v1/cart")))
+                    .andExpect(jsonPath("$.items.length()").value(1))
+                    .andExpect(jsonPath("$.items[0].menuName").value("라볶이"));
+        }
+
+        @Test
+        void 주문_항목이_장바구니의_전부면_장바구니를_지운다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+
+            confirm(1).andExpect(status().isOk());
+
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders.cart", Integer.class)).isZero();
+        }
+
+        @Test
+        void 가게가_마감했으면_승인을_부르지_않고_결제만료_400_STORE_CLOSED() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            given(storeClient.getStore(1L)).willReturn(Optional.of(
+                    new StoreInternal("싹분식", "서울시 마포구 1", OWNER_ID, 3000, 12000, false)));
+            given(paymentClient.expire(1L)).willReturn(new PaymentExpireResult(1L, PaymentExpireResult.Result.EXPIRED, null));
+
+            confirm(1)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("STORE_CLOSED"));
+
+            then(paymentClient).should(never()).confirm(any());
+            assertThat(orderStatus(1)).isEqualTo("PAYMENT_EXPIRED");
+            mockMvc.perform(customer(get("/v1/cart")))
+                    .andExpect(jsonPath("$.items.length()").value(1));
+        }
+
+        @Test
+        void 품절이면_승인을_부르지_않고_결제만료_400_MENU_NOT_ON_SALE() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            storeMenus = List.of(new MenuInternal(1L, "참치김밥", 4500, MenuInternal.SaleStatus.SOLD_OUT));
+            given(paymentClient.expire(1L)).willReturn(new PaymentExpireResult(1L, PaymentExpireResult.Result.EXPIRED, null));
+
+            confirm(1)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("MENU_NOT_ON_SALE"));
+
+            then(paymentClient).should(never()).confirm(any());
+            assertThat(orderStatus(1)).isEqualTo("PAYMENT_EXPIRED");
+        }
+
+        @Test
+        void 마감이어도_앞선_시도의_승인이_10분_이내면_결제완료() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            given(storeClient.getStore(1L)).willReturn(Optional.of(
+                    new StoreInternal("싹분식", "서울시 마포구 1", OWNER_ID, 3000, 12000, false)));
+            given(paymentClient.expire(1L)).willReturn(new PaymentExpireResult(1L, PaymentExpireResult.Result.APPROVED,
+                    OffsetDateTime.now().minusMinutes(1)));
+
+            confirm(1)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("PAID"));
+        }
+
+        @Test
+        void 마감이고_앞선_시도의_승인이_10분을_넘었으면_자동_환불() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            given(storeClient.getStore(1L)).willReturn(Optional.of(
+                    new StoreInternal("싹분식", "서울시 마포구 1", OWNER_ID, 3000, 12000, false)));
+            given(paymentClient.expire(1L)).willReturn(new PaymentExpireResult(1L, PaymentExpireResult.Result.APPROVED,
+                    OffsetDateTime.now().minusMinutes(11)));
+
+            confirm(1)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("STORE_CLOSED"));
+
+            assertThat(orderStatus(1)).isEqualTo("PAYMENT_EXPIRED");
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders.outbox WHERE event_type = 'CancelPayment'",
+                    Integer.class)).isEqualTo(1);
+        }
+
+        @Test
+        void store_가_응답하지_않으면_503_이고_주문은_그대로() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            given(storeClient.getStore(1L))
+                    .willThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE));
+
+            confirm(1).andExpect(status().isServiceUnavailable());
+
+            then(paymentClient).should(never()).confirm(any());
+            assertThat(orderStatus(1)).isEqualTo("PENDING_PAYMENT");
+        }
+
+        @Test
+        void 결과를_모르면_502_이고_결제대기로_남아_다시_시도할_수_있다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            willThrow(new BusinessException(OrderErrorCode.PAYMENT_GATEWAY_ERROR))
+                    .willDoNothing()
+                    .given(paymentClient).confirm(any());
+
+            confirm(1)
+                    .andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_GATEWAY_ERROR"));
+            assertThat(orderStatus(1)).isEqualTo("PENDING_PAYMENT");
+
+            confirm(1)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("PAID"));
+        }
+
+        @Test
+        void 이미_결제완료면_payment_를_부르지_않고_성공으로_응답한다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAID");
+
+            confirm(1)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("PAID"));
+
+            then(paymentClient).should(never()).confirm(any());
+        }
+
+        @Test
+        void 결제만료_주문이면_payment_를_부르지_않고_409_ORDER_INVALID_STATUS() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "PAYMENT_EXPIRED");
+
+            confirm(1)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
+
+            then(paymentClient).should(never()).confirm(any());
+        }
+
+        @Test
+        void 없는_주문이거나_남의_주문이면_404_ORDER_NOT_FOUND() throws Exception {
+            placeOrder(CUSTOMER_ID);
+
+            confirm(99)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+            mockMvc.perform(member(post("/v1/orders/1/payment/confirm"), 8L, "CUSTOMER").content(CONFIRM_BODY))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+
+            then(paymentClient).should(never()).confirm(any());
+        }
+
+        @Test
+        void 결제_키나_금액이_없으면_400() throws Exception {
+            mockMvc.perform(customer(post("/v1/orders/1/payment/confirm")).content("{\"amount\":16500}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+            mockMvc.perform(customer(post("/v1/orders/1/payment/confirm")).content("{\"paymentKey\":\"key-1\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+
+        private ResultActions confirm(long orderId) throws Exception {
+            return mockMvc.perform(customer(post("/v1/orders/" + orderId + "/payment/confirm")).content(CONFIRM_BODY));
         }
     }
 
@@ -566,6 +794,25 @@ class OrderControllerTest extends IntegrationTest {
         jdbcTemplate.update("UPDATE orders.orders SET status = ? WHERE id = ?", status, orderId);
     }
 
+    private String orderStatus(long orderId) {
+        return jdbcTemplate.queryForObject("SELECT status FROM orders.orders WHERE id = ?", String.class, orderId);
+    }
+
+    // payment 가 준 에러가 그대로 전달되는지 볼 때 쓴다
+    private enum TestErrorCode implements ErrorCode {
+        PAYMENT_IN_PROGRESS;
+
+        @Override
+        public int getStatus() {
+            return 409;
+        }
+
+        @Override
+        public String getMessage() {
+            return "이전 결제를 확인하고 있어요";
+        }
+    }
+
     private ResultActions owner(MockHttpServletRequestBuilder request) throws Exception {
         return mockMvc.perform(member(request, OWNER_ID, "OWNER"));
     }
@@ -577,6 +824,8 @@ class OrderControllerTest extends IntegrationTest {
 
     // 참치김밥 3개(13500) + 배달비 3000 = 16500
     private void placeOrder(long customerId) throws Exception {
+        // 주문 생성은 장바구니를 비우지 않으므로 앞 주문의 항목을 치운다
+        jdbcTemplate.update("DELETE FROM orders.cart WHERE customer_id = ?", customerId);
         if (customerId != CUSTOMER_ID) {
             given(memberClient.getMember(customerId)).willReturn(Optional.of(
                     new MemberInternal("다른고객", "010-0000-0000", "other@baedalsak.click", "CUSTOMER")));
