@@ -11,8 +11,17 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.List;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
+
+    // 점검: 일정 시간 지난 결제대기 주문을 100건씩 (orders_pending_payment_idx)
+    List<Order> findTop100ByStatusAndCreatedAtLessThanEqualAndIdGreaterThanOrderById(
+            OrderStatus status, OffsetDateTime createdBefore, Long afterId);
+
+    // 점검: 최근에 환불 대상이 된 주문을 100건씩 (orders_refund_check_idx)
+    List<Order> findTop100ByStatusInAndUpdatedAtGreaterThanEqualAndIdGreaterThanOrderById(
+            Collection<OrderStatus> statuses, OffsetDateTime updatedSince, Long afterId);
 
     // 내 주문 최신순 (orders_customer_idx: customer_id, created_at DESC)
     Page<Order> findAllByCustomerIdOrderByCreatedAtDescIdDesc(Long customerId, Pageable pageable);

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public interface OutboxRepository extends JpaRepository<OutboxEvent, Long> {
@@ -19,4 +20,13 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, Long> {
                FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
     List<OutboxEvent> findUnpublishedForUpdate(@Param("limit") int limit);
+
+    // 아직 발행 전이거나 최근에 만든 같은 명령이 있는가 (outbox_cancel_payment_idx)
+    @Query("""
+            SELECT COUNT(o) > 0 FROM OutboxEvent o
+             WHERE o.aggregateId = :aggregateId AND o.eventType = :eventType
+               AND (o.publishedAt IS NULL OR o.createdAt >= :since)
+            """)
+    boolean existsUnpublishedOrSince(@Param("aggregateId") Long aggregateId, @Param("eventType") String eventType,
+                                     @Param("since") OffsetDateTime since);
 }

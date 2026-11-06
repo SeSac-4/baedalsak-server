@@ -9,6 +9,7 @@ import com.baedalsak.order.event.OutboxAppender;
 import com.baedalsak.order.repository.CartRepository;
 import com.baedalsak.order.repository.OrderItemRepository;
 import com.baedalsak.order.repository.OrderRepository;
+import com.baedalsak.order.repository.OutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,11 +32,14 @@ public class OrderPaymentTransitions {
     // 평소 지연·짧은 장애는 결제완료, 그 이상은 늦은 주문으로 환불
     static final Duration LATE_APPROVAL_LIMIT = Duration.ofMinutes(10);
     static final String LATE_APPROVAL_REASON = "결제 확인이 늦어져 자동 환불";
+    static final Duration REFUND_RESEND_INTERVAL = Duration.ofMinutes(10);
+    static final String REFUND_RESEND_REASON = "환불 명령 재전송";
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
     private final OutboxAppender outboxAppender;
+    private final OutboxRepository outboxRepository;
     private final Clock clock;
 
     // 결제대기 → 결제완료 + 주문에 들어간 항목만 장바구니에서 삭제. 이미 바뀌었으면 false
@@ -73,9 +77,24 @@ public class OrderPaymentTransitions {
     @Transactional
     public void requestRefund(Long orderId, Long paymentId) {
         log.warn("order refund requested: orderId={}, paymentId={}", orderId, paymentId);
+        appendCancelPayment(orderId, paymentId, LATE_APPROVAL_REASON);
+    }
+
+    // 환불 대상인데 결제가 아직 승인 상태일 때 명령을 다시 남긴다.
+    // 발행 대기 중이거나 최근에 남겼으면 건너뛴다 (1분마다 쌓이지 않게). 파드가 겹쳐 두 번 남겨도 payment 가 한 번만 취소한다
+    @Transactional
+    public boolean resendRefundIfDue(Long orderId, Long paymentId) {
+        if (outboxRepository.existsUnpublishedOrSince(orderId, CancelPaymentCommand.EVENT_TYPE,
+                now().minus(REFUND_RESEND_INTERVAL))) {
+            return false;
+        }
+        appendCancelPayment(orderId, paymentId, REFUND_RESEND_REASON);
+        return true;
+    }
+
+    private void appendCancelPayment(Long orderId, Long paymentId, String reason) {
         outboxAppender.append(CancelPaymentCommand.EVENT_TYPE, CancelPaymentCommand.ROUTING_KEY, orderId,
-                new CancelPaymentCommand(orderId, paymentId, LATE_APPROVAL_REASON,
-                        CancelPaymentCommand.REQUESTED_BY_SYSTEM));
+                new CancelPaymentCommand(orderId, paymentId, reason, CancelPaymentCommand.REQUESTED_BY_SYSTEM));
     }
 
     // 항목이 남지 않으면 장바구니도 지운다 (빈 장바구니에 가게 정보만 남지 않게)
