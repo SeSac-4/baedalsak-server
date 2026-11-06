@@ -17,12 +17,18 @@ public record TossCancelResponse(
 ) {
 
   public static final String CANCELED = "CANCELED";
+  public static final String DONE = "DONE";
 
   public record Cancel(Integer cancelAmount, OffsetDateTime canceledAt, String transactionKey, String cancelStatus) {
   }
 
   public boolean isCanceled() {
     return CANCELED.equals(status);
+  }
+
+  // 승인 완료 (취소 전). 재처리(#153)가 토스 취소를 다시 부를지 판단
+  public boolean isApproved() {
+    return DONE.equals(status);
   }
 
   // 가장 최근 취소 거래 (전액 취소면 1건). 없으면 null

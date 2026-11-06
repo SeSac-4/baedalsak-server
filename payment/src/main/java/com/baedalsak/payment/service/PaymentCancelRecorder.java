@@ -1,6 +1,7 @@
 package com.baedalsak.payment.service;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 결제 취소의 DB 기록 (#127). 토스 호출 중에 트랜잭션을 잡지 않도록 단계마다 짧은 트랜잭션으로 나눈다.
  * payment.status 와 payment_cancel.status 는 같은 트랜잭션에서 함께 바꾸고, 바꿀 때는 모두 조건부 UPDATE (0행이면 다른 처리가 먼저 함).
+ * 명령 처리(#127)와 재처리 API(#153)가 같이 쓴다. 재처리는 명령 ID 가 없어 messageId 를 null 로 넘긴다.
  */
 @Component
 @RequiredArgsConstructor
@@ -64,11 +66,12 @@ public class PaymentCancelRecorder {
     if (paymentRepository.changeStatus(payment.getId(), PaymentStatus.CANCEL_REQUESTED, PaymentStatus.CANCELED) == 0) {
       return false;
     }
+    // 진행 중이 보통이고, 재처리(#153)에서는 확정 거절(FAILED) 뒤 토스가 실제로 취소된 경우도 완료로 맞춘다
     paymentCancelRepository.markDone(cancel.getId(), transactionKey, canceledAt,
-        PaymentCancelStatus.PENDING, PaymentCancelStatus.DONE);
+        List.of(PaymentCancelStatus.PENDING, PaymentCancelStatus.FAILED), PaymentCancelStatus.DONE);
     outboxAppender.append(PaymentCanceledEvent.TYPE, PaymentCanceledEvent.ROUTING_KEY, payment.getId(),
         new PaymentCanceledEvent(payment.getId(), payment.getOrderId(), cancel.getAmount(), canceledAt));
-    processedEventRepository.insertIfAbsent(messageId, CancelPaymentCommand.TYPE);
+    markProcessed(messageId);
     return true;
   }
 
@@ -83,7 +86,27 @@ public class PaymentCancelRecorder {
     }
     outboxAppender.append(PaymentCancelFailedEvent.TYPE, PaymentCancelFailedEvent.ROUTING_KEY, payment.getId(),
         new PaymentCancelFailedEvent(payment.getId(), payment.getOrderId(), tossCode, tossMessage));
-    processedEventRepository.insertIfAbsent(messageId, CancelPaymentCommand.TYPE);
+    markProcessed(messageId);
     return true;
+  }
+
+  /**
+   * 재처리(#153): 환불 처리 중인데 이전 취소가 확정 거절(FAILED)로 끝나 진행 중 행이 없을 때, 새 진행 중 취소 행(새 멱등 키)을 만든다.
+   * 결제는 이미 환불 처리 중이라 상태를 바꾸지 않는다. 그 사이 다른 재처리가 먼저 만들었으면(진행 중 1건 부분 UNIQUE) 빈 값.
+   */
+  @Transactional
+  public Optional<PaymentCancel> restart(Payment payment, PaymentCancel failed) {
+    if (paymentCancelRepository.findByPaymentIdAndStatus(payment.getId(), PaymentCancelStatus.PENDING).isPresent()) {
+      return Optional.empty();
+    }
+    return Optional.of(paymentCancelRepository.saveAndFlush(
+        PaymentCancel.fullCancel(payment, failed.getReason(), failed.getRequestedBy())));
+  }
+
+  // 명령으로 처리한 경우에만 processed_event 를 남긴다 (재처리 · 대사는 명령이 없어 null)
+  private void markProcessed(UUID messageId) {
+    if (messageId != null) {
+      processedEventRepository.insertIfAbsent(messageId, CancelPaymentCommand.TYPE);
+    }
   }
 }

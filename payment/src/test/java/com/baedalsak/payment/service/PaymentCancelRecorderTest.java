@@ -19,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -79,8 +81,8 @@ class PaymentCancelRecorderTest {
 
         assertThat(recorder.complete(payment(), cancel, "tx_1", CANCELED_AT, MESSAGE_ID)).isTrue();
 
-        verify(paymentCancelRepository).markDone(3L, "tx_1", CANCELED_AT, PaymentCancelStatus.PENDING,
-                PaymentCancelStatus.DONE);
+        verify(paymentCancelRepository).markDone(3L, "tx_1", CANCELED_AT,
+                List.of(PaymentCancelStatus.PENDING, PaymentCancelStatus.FAILED), PaymentCancelStatus.DONE);
         verify(outboxAppender).append(PaymentCanceledEvent.TYPE, "payment.canceled", 7L,
                 new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT));
         verify(processedEventRepository).insertIfAbsent(MESSAGE_ID, "CancelPayment");
@@ -112,6 +114,49 @@ class PaymentCancelRecorderTest {
 
         assertThat(recorder.fail(payment(), cancel(), "INVALID_REQUEST", "잘못된 요청", MESSAGE_ID)).isFalse();
         verify(outboxAppender, never()).append(anyString(), anyString(), anyLong(), any());
+    }
+
+    @Test
+    void 재처리_완료는_명령_ID_가_없어_processed_event_를_남기지_않는다() {
+        given(paymentRepository.changeStatus(7L, PaymentStatus.CANCEL_REQUESTED, PaymentStatus.CANCELED)).willReturn(1);
+
+        assertThat(recorder.complete(payment(), cancel(), "tx_1", CANCELED_AT, null)).isTrue();
+
+        verify(outboxAppender).append(PaymentCanceledEvent.TYPE, "payment.canceled", 7L,
+                new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT));
+        verifyNoInteractions(processedEventRepository);
+    }
+
+    @Test
+    void 재처리_확정_거절도_processed_event_를_남기지_않는다() {
+        given(paymentCancelRepository.markFailed(3L, PaymentCancelStatus.PENDING, PaymentCancelStatus.FAILED)).willReturn(1);
+
+        assertThat(recorder.fail(payment(), cancel(), "INVALID_REQUEST", "잘못된 요청", null)).isTrue();
+        verifyNoInteractions(processedEventRepository);
+    }
+
+    @Test
+    void 다시_시작은_거절된_취소의_사유_요청자로_새_멱등_키_행을_만든다() {
+        PaymentCancel failed = cancel();
+        given(paymentCancelRepository.findByPaymentIdAndStatus(7L, PaymentCancelStatus.PENDING)).willReturn(Optional.empty());
+        given(paymentCancelRepository.saveAndFlush(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentCancel restarted = recorder.restart(payment(), failed).orElseThrow();
+
+        assertThat(restarted.getStatus()).isEqualTo(PaymentCancelStatus.PENDING);
+        assertThat(restarted.getReason()).isEqualTo("재료 소진");
+        assertThat(restarted.getRequestedBy()).isEqualTo(CancelRequester.OWNER);
+        assertThat(restarted.getIdempotencyKey()).isNotEqualTo(failed.getIdempotencyKey());
+        verify(paymentRepository, never()).changeStatus(anyLong(), any(), any());
+    }
+
+    @Test
+    void 다시_시작은_진행_중_취소가_이미_있으면_만들지_않는다() {
+        given(paymentCancelRepository.findByPaymentIdAndStatus(7L, PaymentCancelStatus.PENDING))
+                .willReturn(Optional.of(cancel()));
+
+        assertThat(recorder.restart(payment(), cancel())).isEmpty();
+        verify(paymentCancelRepository, never()).saveAndFlush(any());
     }
 
     private static PaymentCancel cancel() {
