@@ -3,9 +3,12 @@ package com.baedalsak.order.service;
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.order.client.CreatePaymentCommand;
 import com.baedalsak.order.client.MemberClient;
 import com.baedalsak.order.client.MemberInternal;
 import com.baedalsak.order.client.MenuInternal;
+import com.baedalsak.order.client.PaymentClient;
+import com.baedalsak.order.client.PaymentReady;
 import com.baedalsak.order.client.StoreClient;
 import com.baedalsak.order.client.StoreInternal;
 import com.baedalsak.order.domain.Cart;
@@ -13,6 +16,7 @@ import com.baedalsak.order.domain.CartItem;
 import com.baedalsak.order.domain.Order;
 import com.baedalsak.order.domain.OrderItem;
 import com.baedalsak.order.dto.request.CreateOrderRequest;
+import com.baedalsak.order.dto.response.OrderCreatedResponse;
 import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.error.OrderErrorCode;
 import com.baedalsak.order.repository.CartRepository;
@@ -23,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -30,7 +35,8 @@ import java.util.stream.Collectors;
 
 /**
  * 주문 생성 (4.1.1). 장바구니 기준으로 store·member 내부 API 로 다시 검증하고, 금액은 서버가 계산한다 (N4.7).
- * 외부 호출은 트랜잭션 밖에서 먼저 끝내고, 저장(주문·항목·장바구니 비우기)만 한 트랜잭션으로 묶는다.
+ * 외부 호출은 트랜잭션 밖에서 먼저 끝내고, 저장(주문·항목)만 한 트랜잭션으로 묶는다.
+ * 저장 뒤 payment 에 결제 요청을 만든다. 장바구니는 결제 완료 때 비운다 (사가 결정 1-1 #2·#8).
  */
 @Slf4j
 @Service
@@ -42,9 +48,11 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final StoreClient storeClient;
     private final MemberClient memberClient;
+    private final PaymentClient paymentClient;
+    private final OrderPaymentService orderPaymentService;
     private final TransactionTemplate transactionTemplate;
 
-    public OrderDetailResponse create(LoginMember member, CreateOrderRequest request) {
+    public OrderCreatedResponse create(LoginMember member, CreateOrderRequest request) {
         Cart cart = cartRepository.findCart(member.id())
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.CART_EMPTY));
         List<CartItem> cartItems = cartRepository.findItems(cart.getId());
@@ -103,18 +111,31 @@ public class OrderService {
                 .deliveryFee(store.deliveryFee())
                 .build();
 
-        return transactionTemplate.execute(status -> {
-            Order saved = orderRepository.save(order);
-            List<OrderItem> orderItems = orderItemRepository.saveAll(cartItems.stream()
+        List<OrderItem> savedItems = new ArrayList<>();
+        Order saved = transactionTemplate.execute(status -> {
+            Order inserted = orderRepository.save(order);
+            savedItems.addAll(orderItemRepository.saveAll(cartItems.stream()
                     .map(item -> {
                         MenuInternal menu = menus.get(item.getMenuId());
-                        return OrderItem.create(saved.getId(), menu.id(), menu.name(), menu.price(),
+                        return OrderItem.create(inserted.getId(), menu.id(), menu.name(), menu.price(),
                                 item.getQuantity());
                     })
-                    .toList());
-            // 주문을 만들면 장바구니는 비운다 (3.1.1)
-            cartRepository.deleteCart(cart);
-            return OrderDetailResponse.of(saved, orderItems);
+                    .toList()));
+            return inserted;
         });
+
+        return OrderCreatedResponse.of(OrderDetailResponse.of(saved, savedItems), requestPayment(saved, savedItems));
+    }
+
+    // 결제 요청을 못 만들면 주문을 결제만료로 정리한다 (사가 결정 3-1). 장바구니는 그대로라 다시 주문할 수 있다
+    private PaymentReady requestPayment(Order order, List<OrderItem> items) {
+        try {
+            return paymentClient.create(new CreatePaymentCommand(order.getId(), order.getTotalAmount(),
+                    order.getCustomerId(), order.getOwnerId(), order.getStoreId(), order.getStoreName(),
+                    order.getCustomerEmail(), order.getOwnerEmail(), OrderItem.orderName(items)));
+        } catch (BusinessException e) {
+            orderPaymentService.expire(order);
+            throw e;
+        }
     }
 }

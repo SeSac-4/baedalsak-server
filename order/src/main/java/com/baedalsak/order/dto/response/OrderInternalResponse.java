@@ -23,23 +23,9 @@ public record OrderInternalResponse(
         String orderName
 ) {
 
-    // 토스 orderName 최대 길이
-    static final int ORDER_NAME_MAX_LENGTH = 100;
-
     public static OrderInternalResponse of(Order order, List<OrderItem> items) {
         return new OrderInternalResponse(order.getTotalAmount(), order.getCustomerId(), order.getStatus(),
                 order.getOwnerId(), order.getStoreId(), order.getStoreName(),
-                order.getCustomerEmail(), order.getOwnerEmail(), orderName(items));
-    }
-
-    // 첫 번째 항목 메뉴명 + " 외 N건" (N = 항목 수 - 1, 수량은 세지 않음). 100자를 넘으면 메뉴명을 줄인다
-    static String orderName(List<OrderItem> items) {
-        String first = items.getFirst().getMenuName();
-        if (items.size() == 1) {
-            return first;
-        }
-        String suffix = " 외 " + (items.size() - 1) + "건";
-        int maxFirstLength = ORDER_NAME_MAX_LENGTH - suffix.length();
-        return (first.length() > maxFirstLength ? first.substring(0, maxFirstLength) : first) + suffix;
+                order.getCustomerEmail(), order.getOwnerEmail(), OrderItem.orderName(items));
     }
 }
