@@ -54,7 +54,9 @@ public class SecurityConfig {
 
                 // ── 사장님 (위에서부터 처음 맞는 규칙 적용 →  /stores/* 보다 먼저) ──
                 .pathMatchers(HttpMethod.GET, "/api/v*/stores/me", "/api/v*/stores/*/orders").hasRole("OWNER")
-                .pathMatchers(HttpMethod.POST, "/api/v*/stores", "/api/v*/stores/*/menus", "/api/v*/orders/*/accept").hasRole("OWNER")
+                // 가게 등록 · 메뉴 등록 · 사진 업로드 주소 발급, 주문 수락 · 거절 (거절은 설계서 v10 4.3.3)
+                .pathMatchers(HttpMethod.POST, "/api/v*/stores", "/api/v*/stores/*/menus", "/api/v*/stores/*/images/upload-url",
+                    "/api/v*/orders/*/accept", "/api/v*/orders/*/reject").hasRole("OWNER")
                 .pathMatchers(HttpMethod.POST, "/api/v*/images/background-removal").hasRole("OWNER")
                 .pathMatchers(HttpMethod.PUT, "/api/v*/stores/**").hasRole("OWNER")     // 가게 수정·영업시간·메뉴 수정
                 .pathMatchers(HttpMethod.PATCH, "/api/v*/stores/**").hasRole("OWNER")   // 운영 상태·품절
@@ -78,6 +80,8 @@ public class SecurityConfig {
                 // ── 고객: 장바구니, 주문 생성·내 주문 목록, 결제 ──
                 .pathMatchers("/api/v*/cart/**", "/api/v*/payments/**").hasRole("CUSTOMER")
                 .pathMatchers(HttpMethod.POST, "/api/v*/orders").hasRole("CUSTOMER")
+                // 주문 취소(수락 전) · 결제 확인 (설계서 v10 4.2.2 · 5.2.1, 조정자 order)
+                .pathMatchers(HttpMethod.POST, "/api/v*/orders/*/cancel", "/api/v*/orders/*/payment/confirm").hasRole("CUSTOMER")
                 .pathMatchers(HttpMethod.GET, "/api/v*/orders").hasRole("CUSTOMER")
 
                 // ── 라이더: 배차 대기·수락·픽업·완료·진행 중 (by-order 는 위에서 먼저 처리됨) ──
