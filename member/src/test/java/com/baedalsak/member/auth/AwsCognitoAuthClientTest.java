@@ -13,7 +13,9 @@ import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
+import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.common.error.ErrorResponse.FieldErrorDetail;
 import com.baedalsak.member.config.CognitoProperties;
 import com.baedalsak.member.domain.Role;
 import com.baedalsak.member.error.MemberErrorCode;
@@ -23,7 +25,12 @@ import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityPr
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AliasExistsException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InvalidParameterException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InvalidPasswordException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.LimitExceededException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.NotAuthorizedException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
 
 /**
  * Cognito 호출 실패를 우리 에러 코드로 바꾸는 곳 (#112 T45 Cognito 장애).
@@ -118,5 +125,65 @@ class AwsCognitoAuthClientTest {
     when(cognito.revokeToken(any(Consumer.class))).thenThrow(SdkClientException.create("connect timed out"));
 
     assertThatCode(() -> client.revoke("rt")).doesNotThrowAnyException();   // 로그아웃은 항상 성공
+  }
+
+  // ── 비밀번호 찾기 · 재설정 (#162) ──
+
+  @Test
+  void 비밀번호_찾기_없는_계정이어도_예외_없음() {
+    // 가입 여부를 숨긴다 → 컨트롤러가 항상 202
+    when(cognito.forgotPassword(any(Consumer.class)))
+        .thenThrow(UserNotFoundException.builder().message("User does not exist.").build());
+
+    assertThatCode(() -> client.forgotPassword("nobody@test.com")).doesNotThrowAnyException();
+  }
+
+  @Test
+  void 비밀번호_찾기_인증된_이메일이_없어도_예외_없음() {
+    when(cognito.forgotPassword(any(Consumer.class)))
+        .thenThrow(InvalidParameterException.builder()
+            .message("Cannot reset password for the user as there is no registered/verified email").build());
+
+    assertThatCode(() -> client.forgotPassword("a@test.com")).doesNotThrowAnyException();
+  }
+
+  @Test
+  void 비밀번호_찾기_횟수_초과면_429() {
+    when(cognito.forgotPassword(any(Consumer.class)))
+        .thenThrow(LimitExceededException.builder().message("Attempt limit exceeded").build());
+
+    assertThatThrownBy(() -> client.forgotPassword("a@test.com"))
+        .extracting("errorCode").isEqualTo(CommonErrorCode.TOO_MANY_REQUESTS);
+  }
+
+  @Test
+  void 재설정_코드가_틀리면_400_code_필드() {
+    when(cognito.confirmForgotPassword(any(Consumer.class)))
+        .thenThrow(CodeMismatchException.builder().message("Invalid verification code provided").build());
+
+    assertThatThrownBy(() -> client.confirmForgotPassword("a@test.com", "000000", "new12345"))
+        .isInstanceOfSatisfying(BusinessException.class, e -> {
+          assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_FAILED);
+          assertThat(e.getErrors()).extracting(FieldErrorDetail::field).containsExactly("code");
+        });
+  }
+
+  @Test
+  void 재설정_새_비밀번호가_규칙_위반이면_400_newPassword_필드() {
+    when(cognito.confirmForgotPassword(any(Consumer.class)))
+        .thenThrow(InvalidPasswordException.builder().message("Password does not conform to policy").build());
+
+    assertThatThrownBy(() -> client.confirmForgotPassword("a@test.com", "123456", "short"))
+        .isInstanceOfSatisfying(BusinessException.class, e ->
+            assertThat(e.getErrors()).extracting(FieldErrorDetail::field).containsExactly("newPassword"));
+  }
+
+  @Test
+  void 전체_로그아웃이_실패해도_예외_없음() {
+    // 비밀번호는 이미 바뀐 뒤라 재설정 응답은 성공(204)으로 둔다
+    when(cognito.adminUserGlobalSignOut(any(Consumer.class)))
+        .thenThrow(SdkClientException.create("connect timed out"));
+
+    assertThatCode(() -> client.globalSignOut(1000L)).doesNotThrowAnyException();
   }
 }

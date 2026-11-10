@@ -102,7 +102,7 @@ spring:
 # 요청 제한 (#24, 설계서 v6 API 명세 429). 값은 부하 테스트 후 조정
 rate-limit:
   enabled: true             # false 면 요청 제한 끔 (부하 테스트·시연 때 환경 변수 RATE_LIMIT_ENABLED=false)
-  auth-per-ip: 10           # 로그인·가입: IP 하나당 1분에 10번
+  auth-per-ip: 10           # 로그인·가입·비밀번호 찾기/재설정: IP 하나당 1분에 10번
   payment-per-member: 10    # 결제: 회원 한 명당 1분에 10번 (제안값)
   ai-image-per-member: 10    #이미지 업도르 요청 1분에 10번(ai)
   default-per-client: 100   # 그 밖의 API: 회원당(로그인 전은 IP당) 1분에 100번

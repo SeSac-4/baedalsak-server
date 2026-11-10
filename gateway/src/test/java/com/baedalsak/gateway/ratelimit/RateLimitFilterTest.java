@@ -70,6 +70,14 @@ class RateLimitFilterTest {
   }
 
   @Test
+  void 비밀번호_찾기와_재설정도_IP로_auth_한도() {
+    filter(ON).filter(guest(MockServerHttpRequest.post("/api/v1/auth/password/forgot")), chain).block();
+    filter(ON).filter(guest(MockServerHttpRequest.post("/api/v1/auth/password/reset")), chain).block();
+
+    verify(counter, times(2)).tryAcquire("auth:ip:10.0.0.5", 11);
+  }
+
+  @Test
   void 주문_생성과_결제_확인은_회원으로_payment_한도() {
     filter(ON).filter(member(MockServerHttpRequest.post("/api/v1/orders")), chain).block();
     filter(ON).filter(member(MockServerHttpRequest.post("/api/v1/orders/5/payment/confirm")), chain).block();

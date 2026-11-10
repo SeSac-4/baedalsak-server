@@ -39,7 +39,8 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
   // StripPrefix 전에 돌기 때문에 경로에 /api 가 남아 있다
   private static final List<PathPattern> AUTH_PATHS = List.of(
       PARSER.parse("/api/v*/auth/login"),
-      PARSER.parse("/api/v*/auth/signup/**"));
+      PARSER.parse("/api/v*/auth/signup/**"),
+      PARSER.parse("/api/v*/auth/password/**"));   // 비밀번호 찾기·재설정 (#162): 메일 낭비·코드 대입 방지
   private static final List<PathPattern> PAYMENT_PATHS = List.of(
       PARSER.parse("/api/v*/orders"),                       // 주문 생성 = 결제 요청 생성 (v10)
       PARSER.parse("/api/v*/orders/*/payment/confirm"));    // 결제 확인 (v10)

@@ -23,6 +23,10 @@ import com.baedalsak.member.dto.SignupRiderRequest;
 import com.baedalsak.member.service.AuthService;
 import com.baedalsak.member.service.SignupService;
 
+import com.baedalsak.member.dto.PasswordForgotRequest;
+import com.baedalsak.member.dto.PasswordResetRequest;
+import com.baedalsak.member.service.PasswordResetService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -35,6 +39,7 @@ public class AuthController {
   private final AuthService authService;
   private final AuthCookies authCookies;
   private final SignupService signupService;
+  private final PasswordResetService passwordResetService;
 
    // 고객 가입 (API 명세 8.1.1) — 201 + 로그인과 같은 쿠키 2개. 가입 즉시 로그인 상태
   @PostMapping("/signup/customer")
@@ -85,6 +90,19 @@ public class AuthController {
         .header(HttpHeaders.SET_COOKIE, authCookies.clearAccess().toString())
         .header(HttpHeaders.SET_COOKIE, authCookies.clearSession().toString())
         .build();
+  }
+    // 비밀번호 찾기 (#162) — 항상 202. 가입 안 된 이메일이어도 같은 응답 (가입 여부 숨김)
+  @PostMapping("/password/forgot")
+  public ResponseEntity<Void> forgotPassword(@Valid @RequestBody PasswordForgotRequest req) {
+    passwordResetService.forgot(req);
+    return ResponseEntity.accepted().build();
+  }
+
+  // 비밀번호 재설정 (#162) — 204. 다른 기기는 다음 토큰 갱신 때 401 → 다시 로그인
+  @PostMapping("/password/reset")
+  public ResponseEntity<Void> resetPassword(@Valid @RequestBody PasswordResetRequest req) {
+    passwordResetService.reset(req);
+    return ResponseEntity.noContent().build();
   }
 
     // 로그인·가입 공통 응답: access·세션 쿠키 2개 + 본문(memberId, role). 토큰은 본문에 안 넣는다
