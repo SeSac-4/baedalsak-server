@@ -26,4 +26,17 @@ public interface CognitoAuthClient {
 
   /** 로그아웃: RevokeToken 으로 refresh 토큰 폐기. 이미 폐기·만료된 토큰이어도 성공으로 본다. */
   void revoke(String refreshToken);
+
+    /**
+   * 비밀번호 찾기: ForgotPassword — Cognito 가 인증된 이메일로 코드를 보낸다.
+   * 가입 여부를 숨기려고, 없는 계정·이메일 미인증이어도 예외 없이 끝낸다.
+   */
+  void forgotPassword(String email);
+
+  /** 재설정: ConfirmForgotPassword — 코드가 맞으면 새 비밀번호로 바꾼다. */
+  void confirmForgotPassword(String email, String code, String newPassword);
+
+  /** 모든 기기 로그아웃: AdminUserGlobalSignOut — 이 사용자의 refresh 토큰을 전부 폐기. 실패해도 경고만. */
+  void globalSignOut(long memberId);
+
 }

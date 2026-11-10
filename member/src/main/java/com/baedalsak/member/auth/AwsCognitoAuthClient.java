@@ -26,6 +26,12 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.MessageActi
 import software.amazon.awssdk.services.cognitoidentityprovider.model.NotAuthorizedException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UsernameExistsException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ExpiredCodeException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InvalidParameterException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.LimitExceededException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.TooManyFailedAttemptsException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.TooManyRequestsException;
 
 /** CognitoAuthClient 의 AWS SDK 구현 (B안: username = member_id, 역할 = 그룹). 비밀번호·토큰은 로그에 남기지 않는다. */
 @Slf4j
@@ -134,6 +140,55 @@ public class AwsCognitoAuthClient implements CognitoAuthClient {
           .token(refreshToken));
     } catch (SdkException e) {
       log.warn("Cognito RevokeToken 실패 — 로그아웃은 계속 진행", e);
+    }
+  }
+    @Override
+  public void forgotPassword(String email) {
+    try {
+      cognito.forgotPassword(r -> r
+          .clientId(props.clientId())
+          .username(email));              // 이메일 별칭으로도 사용자를 찾는다
+    } catch (UserNotFoundException | InvalidParameterException | NotAuthorizedException e) {
+      // 없는 계정 · 인증된 이메일 없음 · 비활성 계정 → 성공처럼 끝냄 (가입 여부를 알려 주지 않음)
+      log.info("비밀번호 찾기 대상 아님 — {}", e.getClass().getSimpleName());
+    } catch (LimitExceededException | TooManyRequestsException e) {
+      throw new BusinessException(CommonErrorCode.TOO_MANY_REQUESTS);
+    } catch (SdkException e) {
+      throw unavailable("ForgotPassword", e);
+    }
+  }
+
+  @Override
+  public void confirmForgotPassword(String email, String code, String newPassword) {
+    try {
+      cognito.confirmForgotPassword(r -> r
+          .clientId(props.clientId())
+          .username(email)
+          .confirmationCode(code)
+          .password(newPassword));
+    } catch (CodeMismatchException | ExpiredCodeException | UserNotFoundException e) {
+      // 없는 계정도 "코드가 틀림"과 같은 답 — 가입 여부 숨김
+      throw new BusinessException(CommonErrorCode.VALIDATION_FAILED,
+          List.of(new FieldErrorDetail("code", "인증 코드가 올바르지 않거나 만료되었습니다.")));
+    } catch (InvalidPasswordException e) {
+      throw new BusinessException(CommonErrorCode.VALIDATION_FAILED,
+          List.of(new FieldErrorDetail("newPassword", "비밀번호는 영문 소문자와 숫자를 포함해 8자 이상이어야 합니다.")));
+    } catch (LimitExceededException | TooManyFailedAttemptsException | TooManyRequestsException e) {
+      throw new BusinessException(CommonErrorCode.TOO_MANY_REQUESTS);
+    } catch (SdkException e) {
+      throw unavailable("ConfirmForgotPassword", e);
+    }
+  }
+
+  @Override
+  public void globalSignOut(long memberId) {
+    // 비밀번호는 이미 바뀐 뒤라 여기서 실패해도 재설정은 성공으로 둔다
+    try {
+      cognito.adminUserGlobalSignOut(r -> r
+          .userPoolId(props.userPoolId())
+          .username(String.valueOf(memberId)));
+    } catch (SdkException e) {
+      log.warn("Cognito 전체 로그아웃 실패 — 다른 기기 세션이 남을 수 있음 memberId={}", memberId, e);
     }
   }
 
