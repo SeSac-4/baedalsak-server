@@ -1,14 +1,17 @@
 package com.baedalsak.delivery.location;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -19,21 +22,30 @@ import java.util.stream.Collectors;
  *   <li>{@code delivery:sim:active} — 가상 GPS 가 돌고 있는 배달 ID 집합</li>
  * </ul>
  * Redis 장애가 배달 API 로 번지지 않도록 모든 메서드는 예외를 던지지 않는다 (실패 시 빈 값 · false).
+ * 접속이 안 되면 경고를 한 번만 남기고 {@link #RETRY_AFTER} 동안 Redis 를 부르지 않는다
+ * (캐시 Redis 가 없는 환경에서 가상 GPS 가 2초마다 실패 로그를 쌓지 않게).
  */
 @Slf4j
 @Component
 public class RiderLocationStore {
 
     static final String ACTIVE_SIMULATIONS_KEY = "delivery:sim:active";
+    /** 접속 실패 후 다시 시도하기까지 쉬는 시간 */
+    static final Duration RETRY_AFTER = Duration.ofSeconds(30);
 
     private final StringRedisTemplate redis;
     private final JsonMapper jsonMapper;
     private final Duration ttl;
+    private final Clock clock;
+    /** 이 시각 전까지는 Redis 를 부르지 않는다. null 이면 정상 */
+    private volatile Instant unavailableUntil;
 
-    public RiderLocationStore(StringRedisTemplate redis, JsonMapper jsonMapper, DeliveryGpsProperties properties) {
+    public RiderLocationStore(StringRedisTemplate redis, JsonMapper jsonMapper, DeliveryGpsProperties properties,
+                              Clock clock) {
         this.redis = redis;
         this.jsonMapper = jsonMapper;
         this.ttl = properties.locationTtl();
+        this.clock = clock;
     }
 
     static String locationKey(Long deliveryId) {
@@ -51,11 +63,10 @@ public class RiderLocationStore {
      * @param location   위치
      */
     public void save(Long deliveryId, RiderLocation location) {
-        try {
+        call("location save", deliveryId, () -> {
             redis.opsForValue().set(locationKey(deliveryId), jsonMapper.writeValueAsString(location), ttl);
-        } catch (RuntimeException e) {
-            log.warn("location save failed: deliveryId={}, cause={}", deliveryId, e.toString());
-        }
+            return null;
+        }, null);
     }
 
     /**
@@ -63,13 +74,11 @@ public class RiderLocationStore {
      * @return 마지막 위치. 없거나 Redis 실패면 빈 값
      */
     public Optional<RiderLocation> find(Long deliveryId) {
-        try {
+        return call("location read", deliveryId, () -> {
             String json = redis.opsForValue().get(locationKey(deliveryId));
-            return json == null ? Optional.empty() : Optional.of(jsonMapper.readValue(json, RiderLocation.class));
-        } catch (RuntimeException e) {
-            log.warn("location read failed: deliveryId={}, cause={}", deliveryId, e.toString());
-            return Optional.empty();
-        }
+            return json == null ? Optional.<RiderLocation>empty()
+                    : Optional.of(jsonMapper.readValue(json, RiderLocation.class));
+        }, Optional.empty());
     }
 
     /**
@@ -80,14 +89,11 @@ public class RiderLocationStore {
      * @return 저장에 성공했거나 이미 있으면 true
      */
     public boolean startSimulation(Long deliveryId, Instant startedAt) {
-        try {
+        return call("simulation start", deliveryId, () -> {
             redis.opsForValue().setIfAbsent(simulationKey(deliveryId), String.valueOf(startedAt.toEpochMilli()), ttl);
             redis.opsForSet().add(ACTIVE_SIMULATIONS_KEY, String.valueOf(deliveryId));
             return true;
-        } catch (RuntimeException e) {
-            log.warn("simulation start failed: deliveryId={}, cause={}", deliveryId, e.toString());
-            return false;
-        }
+        }, false);
     }
 
     /**
@@ -95,34 +101,28 @@ public class RiderLocationStore {
      * @return 가상 GPS 시작 시각. 없으면 빈 값
      */
     public Optional<Instant> findSimulationStart(Long deliveryId) {
-        try {
+        return call("simulation read", deliveryId, () -> {
             String value = redis.opsForValue().get(simulationKey(deliveryId));
             if (value == null) {
-                return Optional.empty();
+                return Optional.<Instant>empty();
             }
             // 위치를 계속 쓰는 동안은 시작 시각도 남아 있어야 하므로 같이 연장한다
             redis.expire(simulationKey(deliveryId), ttl);
             return Optional.of(Instant.ofEpochMilli(Long.parseLong(value)));
-        } catch (RuntimeException e) {
-            log.warn("simulation read failed: deliveryId={}, cause={}", deliveryId, e.toString());
-            return Optional.empty();
-        }
+        }, Optional.empty());
     }
 
     /**
      * @return 가상 GPS 가 돌고 있는 배달 ID. Redis 실패면 빈 집합
      */
     public Set<Long> activeSimulations() {
-        try {
+        return call("simulation list", null, () -> {
             Set<String> members = redis.opsForSet().members(ACTIVE_SIMULATIONS_KEY);
             if (members == null) {
-                return Set.of();
+                return Set.<Long>of();
             }
             return members.stream().map(Long::valueOf).collect(Collectors.toUnmodifiableSet());
-        } catch (RuntimeException e) {
-            log.warn("simulation list failed: cause={}", e.toString());
-            return Set.of();
-        }
+        }, Set.of());
     }
 
     /**
@@ -131,25 +131,52 @@ public class RiderLocationStore {
      * @param deliveryId 배달 ID
      */
     public void stopSimulation(Long deliveryId) {
-        try {
+        call("simulation stop", deliveryId, () -> {
             redis.delete(simulationKey(deliveryId));
             redis.opsForSet().remove(ACTIVE_SIMULATIONS_KEY, String.valueOf(deliveryId));
-        } catch (RuntimeException e) {
-            log.warn("simulation stop failed: deliveryId={}, cause={}", deliveryId, e.toString());
-        }
+            return null;
+        }, null);
     }
 
     /**
-     * 배달이 끝났을 때 위치 · 가상 GPS 상태를 모두 지운다.
+     * 배달이 끝났을 때 위치 · 가상 GPS 상태를 모두 지운다. 지우지 못해도 위치 키는 TTL 로 사라진다.
      *
      * @param deliveryId 배달 ID
      */
     public void clear(Long deliveryId) {
-        stopSimulation(deliveryId);
+        call("location clear", deliveryId, () -> {
+            redis.delete(Set.of(simulationKey(deliveryId), locationKey(deliveryId)));
+            redis.opsForSet().remove(ACTIVE_SIMULATIONS_KEY, String.valueOf(deliveryId));
+            return null;
+        }, null);
+    }
+
+    /**
+     * Redis 호출 공통 처리. 쉬는 중이면 부르지 않고 fallback 을 돌려준다.
+     * 접속 실패(DataAccessException)는 처음 한 번만 경고하고 RETRY_AFTER 동안 쉰다. 그 밖의 실패는 그때마다 경고한다.
+     */
+    private <T> T call(String action, Long deliveryId, Supplier<T> operation, T fallback) {
+        Instant until = unavailableUntil;
+        if (until != null && clock.instant().isBefore(until)) {
+            return fallback;
+        }
         try {
-            redis.delete(locationKey(deliveryId));
+            T result = operation.get();
+            if (until != null) {
+                unavailableUntil = null;
+                log.info("cache redis recovered");
+            }
+            return result;
+        } catch (DataAccessException e) {
+            unavailableUntil = clock.instant().plus(RETRY_AFTER);
+            if (until == null) {
+                log.warn("cache redis unavailable, location disabled for {}s: action={}, cause={}",
+                        RETRY_AFTER.toSeconds(), action, e.toString());
+            }
+            return fallback;
         } catch (RuntimeException e) {
-            log.warn("location clear failed, expires by TTL: deliveryId={}, cause={}", deliveryId, e.toString());
+            log.warn("{} failed: deliveryId={}, cause={}", action, deliveryId, e.toString());
+            return fallback;
         }
     }
 }

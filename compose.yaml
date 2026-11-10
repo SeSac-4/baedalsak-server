@@ -15,7 +15,7 @@
 #   정리 (DB 데이터까지 지우려면 -v)
 #     docker compose --profile apps down
 #
-# 운영(v6) 대응: RDS PostgreSQL(인스턴스 1개 · 서비스별 DB 5개) / Amazon MQ for RabbitMQ 4.2 / ElastiCache(세션·토큰)
+# 운영(v6) 대응: RDS PostgreSQL(인스턴스 1개 · 서비스별 DB 5개) / Amazon MQ for RabbitMQ 4.2 / ElastiCache(세션·토큰, 캐시)
 # DynamoDB 는 주석 처리 (사용처 없음), 관측성(Prometheus·Grafana·Loki·Tempo)은 AWS 인프라에만 있음 — 목록: docs/backend-infra-rules.md 9번
 # =============================================================================
 
@@ -30,7 +30,7 @@ x-app: &app
     rabbitmq: { condition: service_healthy }
     # dynamodb: { condition: service_started }        # DynamoDB 주석 처리
     redis-session: { condition: service_healthy }
-    # redis-cache: { condition: service_healthy }      # DB 캐시용 Redis 보류
+    # redis-cache 는 delivery 만 기다린다 (delivery 서비스의 depends_on)
 
 x-app-env: &app-env
   SPRING_PROFILES_ACTIVE: local
@@ -57,10 +57,7 @@ x-app-env: &app-env
   REDIS_SESSION_HOST: redis-session
   REDIS_SESSION_PORT: "6379" # 컨테이너끼리는 둘 다 6379
   REDIS_SESSION_PASSWORD: ${REDIS_SESSION_PASSWORD:?.env 파일을 만들어 주세요}
-  # DB 캐시용 Redis — 보류 (도입 시 주석 해제)
-  # REDIS_CACHE_HOST: redis-cache
-  # REDIS_CACHE_PORT: "6379"
-  # REDIS_CACHE_PASSWORD: ${REDIS_CACHE_PASSWORD:?.env 파일을 만들어 주세요}
+  # 캐시용 Redis(REDIS_CACHE_*)는 delivery 서비스에만 주입한다
 
 services:
   # =========================== 의존성 ===========================
@@ -128,26 +125,27 @@ services:
       timeout: 3s
       retries: 20
 
-  # ---------- Redis ② DB 캐시용 — 보류 (도입 시 주석 해제) ----------
-  # 고객·메뉴·가게처럼 잘 안 바뀌는 조회 결과 캐시. 지워져도 DB에서 다시 읽으면 되므로 allkeys-lru
-  # redis-cache:
-  #   image: redis:7-alpine
-  #   ports: ["6380:6379"]                  # 로컬 PC에서는 6380, 컨테이너 안에서는 6379
-  #   environment:
-  #     REDISCLI_AUTH: ${REDIS_CACHE_PASSWORD:?.env 파일을 만들어 주세요}
-  #   command:
-  #     - redis-server
-  #     - --requirepass
-  #     - ${REDIS_CACHE_PASSWORD:?.env 파일을 만들어 주세요}
-  #     - --maxmemory
-  #     - 256mb
-  #     - --maxmemory-policy
-  #     - allkeys-lru
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 20
+  # ---------- Redis ② 캐시용 (delivery 실시간 위치, #160) ----------
+  # 지워져도 다시 채워지는 값만 넣으므로 allkeys-lru. 지금은 delivery 만 사용 (라이더 위치 · 가상 GPS 상태)
+  # 비밀번호가 .env 에 없어도 compose 전체가 멈추지 않도록 로컬 기본값을 둔다 (.env.example 과 같은 값)
+  redis-cache:
+    image: redis:7-alpine
+    ports: ["6380:6379"] # 로컬 PC에서는 6380, 컨테이너 안에서는 6379
+    environment:
+      REDISCLI_AUTH: ${REDIS_CACHE_PASSWORD:-change-me-local} # healthcheck용
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_CACHE_PASSWORD:-change-me-local}
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   # =================== 서비스 (profile: apps) ===================
   # 저장소 루트의 Dockerfile로 직접 빌드. 모듈 폴더 경로는 .env의 *_MODULE로 바꿀 수 있음
@@ -220,6 +218,19 @@ services:
       DB_USER: delivery_svc
       DB_SCHEMA: delivery
       MEMBER_SERVICE_URL: http://member:8080 # [내부] 배차 수락 시 라이더 이름
+      # 캐시 Redis — 라이더 실시간 위치 · 가상 GPS 상태 (#160)
+      REDIS_CACHE_HOST: redis-cache
+      REDIS_CACHE_PORT: "6379"
+      REDIS_CACHE_PASSWORD: ${REDIS_CACHE_PASSWORD:-change-me-local}
+      # 카카오 REST 키 — 주소 → 좌표 · 길찾기. 없으면 좌표 · 경로 없이 동작 (위치 기능만 빠짐)
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      DELIVERY_GPS_MODE: ${DELIVERY_GPS_MODE:-virtual}
+    # 공통 depends_on 은 덮어써지므로 전부 다시 적고 redis-cache 를 더한다
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis-session: { condition: service_healthy }
+      redis-cache: { condition: service_healthy }
 
   # 인증·인가
   member:
