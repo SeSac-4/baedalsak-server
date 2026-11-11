@@ -71,4 +71,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("UPDATE Order o SET o.riderName = :riderName, o.updatedAt = :now WHERE o.id = :orderId")
     int assignRider(@Param("orderId") Long orderId, @Param("riderName") String riderName,
                     @Param("now") OffsetDateTime now);
+
+    // 가게의 진행 중 주문 수 (store 가 폐업 전에 확인, #176). orders_store_status_idx 사용
+    long countByStoreIdAndStatusIn(Long storeId, Collection<OrderStatus> statuses);
 }

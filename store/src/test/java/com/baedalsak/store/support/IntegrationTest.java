@@ -1,5 +1,6 @@
 package com.baedalsak.store.support;
 
+import com.baedalsak.store.client.OrderClient;
 import com.baedalsak.store.config.ImageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -56,6 +58,10 @@ public abstract class IntegrationTest {
 
     @Autowired
     protected JdbcTemplate jdbcTemplate;
+
+    // order [내부] API (가게 폐업 전 진행 중 주문 확인). 기본은 0건 → 폐업 가능. 테스트마다 초기화된다
+    @MockitoBean
+    protected OrderClient orderClient;
 
     @BeforeEach
     void cleanUp() {

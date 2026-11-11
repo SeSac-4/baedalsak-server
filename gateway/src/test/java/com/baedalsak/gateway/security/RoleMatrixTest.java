@@ -83,6 +83,7 @@ class RoleMatrixTest {
       POST   | /api/v1/stores/3/images/upload-url       | O
       POST   | /api/v1/stores/3/menus                   | O
       PUT    | /api/v1/stores/3/menus/7                 | O
+      DELETE | /api/v1/stores/3                         | O
       DELETE | /api/v1/stores/3/menus/7                 | O
       PATCH  | /api/v1/stores/3/menus/7/status          | O
       GET    | /api/v1/stores/3/orders                  | O

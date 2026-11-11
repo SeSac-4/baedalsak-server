@@ -7,6 +7,7 @@ import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.order.domain.Order;
 import com.baedalsak.order.domain.OrderItem;
 import com.baedalsak.order.domain.OrderStatus;
+import com.baedalsak.order.dto.response.ActiveOrderCountResponse;
 import com.baedalsak.order.dto.response.OrderDetailResponse;
 import com.baedalsak.order.dto.response.OrderInternalResponse;
 import com.baedalsak.order.dto.response.OrderSummaryResponse;
@@ -36,6 +37,10 @@ public class OrderQueryService {
     // 결제가 끝나지 않았거나 만료된 주문은 아직 주문이 아니다. 고객 주문 내역과 사장님 목록에 보이지 않는다
     private static final EnumSet<OrderStatus> UNPAID =
             EnumSet.of(OrderStatus.PENDING_PAYMENT, OrderStatus.PAYMENT_EXPIRED);
+
+    // 가게 폐업을 막는 진행 중 상태 (#176)
+    private static final EnumSet<OrderStatus> ACTIVE_STATUSES =
+            EnumSet.of(OrderStatus.PAID, OrderStatus.COOKING, OrderStatus.DELIVERING);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -94,6 +99,12 @@ public class OrderQueryService {
     public OrderInternalResponse getInternal(Long orderId) {
         return OrderInternalResponse.of(getExistingOrder(orderId),
                 orderItemRepository.findAllByOrderIdOrderById(orderId));
+    }
+
+    // [내부] 가게의 진행 중 주문 수. store 가 폐업 전에 확인한다 (#176)
+    //   결제대기는 빼는데, 폐업 후 결제 확정 시 승인 직전 재확인에서 STORE_NOT_FOUND 로 실패해 돈이 나가지 않기 때문
+    public ActiveOrderCountResponse countActiveByStore(Long storeId) {
+        return new ActiveOrderCountResponse(orderRepository.countByStoreIdAndStatusIn(storeId, ACTIVE_STATUSES));
     }
 
     // 한 페이지의 주문 항목을 한 번에 조회

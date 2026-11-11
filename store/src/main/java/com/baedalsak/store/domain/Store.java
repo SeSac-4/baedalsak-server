@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -20,8 +21,10 @@ import java.time.OffsetDateTime;
 /**
  * 가게 (store 테이블). 사장님 1명 = 가게 1개 (owner_id UNIQUE).
  * 등록 직후 운영 상태는 임시 중지(PAUSED)로 시작한다 (1.2.1).
+ * 폐업은 soft delete (deleted_at, #176). 폐업한 가게는 JPA 조회 전체에서 빠진다 (@SQLRestriction).
  */
 @Entity
+@SQLRestriction("deleted_at IS NULL")
 @Table(name = "store")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -31,8 +34,8 @@ public class Store {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // member.id (다른 서비스라 FK 없음)
-    @Column(nullable = false, unique = true, updatable = false)
+    // member.id (다른 서비스라 FK 없음). 폐업하지 않은 가게끼리만 UNIQUE (store_owner_active_uq)
+    @Column(nullable = false, updatable = false)
     private Long ownerId;
 
     @Column(nullable = false, length = 100)
@@ -57,6 +60,9 @@ public class Store {
 
     // 사진 S3 키 (stores/{id}/…). null 이면 사진 없음
     private String imageKey;
+
+    // 폐업 시각. null 이면 운영 중
+    private OffsetDateTime deletedAt;
 
     @Column(nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -92,6 +98,11 @@ public class Store {
 
     public void changeOperationStatus(OperationStatus operationStatus) {
         this.operationStatus = operationStatus;
+    }
+
+    // 폐업 (soft delete, #176). 주문 이력이 가게를 참조하므로 행은 남긴다
+    public void close(OffsetDateTime now) {
+        this.deletedAt = now;
     }
 
     public boolean isOwnedBy(Long memberId) {

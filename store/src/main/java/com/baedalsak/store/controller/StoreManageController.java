@@ -10,6 +10,7 @@ import com.baedalsak.store.service.StoreManageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,5 +57,12 @@ public class StoreManageController {
     public StoreDetailResponse replaceBusinessHours(@CurrentMember LoginMember member, @PathVariable Long storeId,
                                                     @Valid @RequestBody BusinessHoursRequest request) {
         return storeManageService.replaceBusinessHours(member, storeId, request);
+    }
+
+    // 가게 폐업 (soft delete, #176). 진행 중 주문이 있으면 409 STORE_HAS_ACTIVE_ORDERS
+    @DeleteMapping("/{storeId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void close(@CurrentMember LoginMember member, @PathVariable Long storeId) {
+        storeManageService.close(member, storeId);
     }
 }
