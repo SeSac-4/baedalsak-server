@@ -4,6 +4,9 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpCookie;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.server.PathContainer;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.stereotype.Component;
@@ -15,9 +18,9 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
 /**
- * 로그아웃할 AT 정보를 member 에 전달한다 (#111).
+ * 블랙리스트에 올릴 AT 정보를 member 에 전달한다 (#111 로그아웃, #188 회원 탈퇴).
  *   ① 클라이언트가 보낸 X-Token-* 는 무조건 삭제 (위조 차단)
- *   ② 로그아웃 요청의 AT 가 유효하면 jti·만료 시각을 헤더로 전달
+ *   ② 로그아웃 · 탈퇴 요청의 AT 가 유효하면 jti·만료 시각을 헤더로 전달
  * /auth/** 는 토큰 검사를 건너뛰므로(CookieBearerTokenConverter) 여기서 직접 검증한다.
  * AT 가 없거나 만료·위조면 헤더 없이 통과 — 로그아웃은 항상 성공해야 한다.
  */
@@ -30,6 +33,8 @@ public class LogoutTokenFilter implements GlobalFilter, Ordered {
 
   private static final PathPattern LOGOUT_PATH =
       PathPatternParser.defaultInstance.parse("/api/v*/auth/logout");
+  private static final PathPattern WITHDRAW_PATH =
+      PathPatternParser.defaultInstance.parse("/api/v*/members/me");   // DELETE 만 (회원 탈퇴, #188)
 
   private final ReactiveJwtDecoder jwtDecoder;   // JWT 경비원과 같은 검사(서명·만료·iss·token_use)
 
@@ -39,7 +44,7 @@ public class LogoutTokenFilter implements GlobalFilter, Ordered {
     HttpCookie cookie = exchange.getRequest().getCookies()
         .getFirst(CookieBearerTokenConverter.ACCESS_COOKIE);
 
-    if (!isLogout(exchange) || cookie == null || cookie.getValue().isBlank()) {
+    if (!needsToken(exchange) || cookie == null || cookie.getValue().isBlank()) {
       return chain.filter(cleaned);
     }
 
@@ -49,8 +54,12 @@ public class LogoutTokenFilter implements GlobalFilter, Ordered {
         .flatMap(chain::filter);
   }
 
-  private boolean isLogout(ServerWebExchange exchange) {
-    return LOGOUT_PATH.matches(exchange.getRequest().getPath().pathWithinApplication());
+  // 지금 AT 를 블랙리스트에 올리는 요청: 로그아웃, 회원 탈퇴(DELETE /members/me, #188)
+  private boolean needsToken(ServerWebExchange exchange) {
+    ServerHttpRequest request = exchange.getRequest();
+    PathContainer path = request.getPath().pathWithinApplication();
+    return LOGOUT_PATH.matches(path)
+        || (HttpMethod.DELETE.equals(request.getMethod()) && WITHDRAW_PATH.matches(path));
   }
 
   private ServerWebExchange rewrite(ServerWebExchange exchange, Jwt jwt) {
