@@ -16,6 +16,9 @@ public enum MemberErrorCode implements ErrorCode {
 
     EMAIL_DUPLICATED(409, "이미 가입된 이메일입니다."),
 
+    // 회원 탈퇴 (#188). 사장님·라이더는 가게·배달 확인 API 가 생기기 전까지 막음, seed(id < 1000)는 팀 공용 계정 보호
+    WITHDRAWAL_NOT_ALLOWED(403, "사장님·라이더와 테스트 계정은 앱에서 탈퇴할 수 없습니다. 고객센터로 문의해 주세요."),
+
     // 휴대폰 인증 (#164)
     PHONE_CODE_COOLDOWN(429, "인증번호는 1분 뒤에 다시 받을 수 있습니다."),
     PHONE_CODE_DAILY_LIMIT(429, "오늘은 인증번호를 더 받을 수 없습니다. 내일 다시 시도해 주세요."),
