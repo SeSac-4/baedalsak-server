@@ -70,6 +70,7 @@ class RoleMatrixTest {
       POST   | /api/v1/auth/refresh                     | PUBLIC
       POST   | /api/v1/auth/logout                      | PUBLIC
       GET    | /api/v1/members/me                       | C O R
+      DELETE | /api/v1/members/me                       | C O R
       GET    | /api/v1/categories                       | C O R
       GET    | /api/v1/stores                           | C O R
       GET    | /api/v1/stores/summary                   | C O R

@@ -54,6 +54,19 @@ class LogoutTokenFilterTest {
   }
 
   @Test
+  void 회원_탈퇴도_jti와_만료_시각을_전달() {   // #188
+    Jwt jwt = Jwt.withTokenValue("good").header("alg", "RS256")
+        .claim("jti", "jti-2").expiresAt(Instant.ofEpochSecond(2_000_000_000L)).build();
+    when(jwtDecoder.decode("good")).thenReturn(Mono.just(jwt));
+
+    HttpHeaders headers = forwardedHeaders(MockServerHttpRequest.delete("/api/v1/members/me")
+        .cookie(new HttpCookie(CookieBearerTokenConverter.ACCESS_COOKIE, "good")));
+
+    assertThat(headers.getFirst(LogoutTokenFilter.TOKEN_ID_HEADER)).isEqualTo("jti-2");
+    assertThat(headers.getFirst(LogoutTokenFilter.TOKEN_EXPIRES_HEADER)).isEqualTo("2000000000");
+  }
+
+  @Test
   void 만료_위조_AT면_헤더_없이_통과() {
     when(jwtDecoder.decode("bad")).thenReturn(Mono.error(new BadJwtException("expired")));
 
