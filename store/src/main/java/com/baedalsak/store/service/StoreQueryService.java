@@ -7,13 +7,14 @@ import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.response.CategoryResponse;
+import com.baedalsak.store.dto.response.CursorResponse;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
 import com.baedalsak.store.dto.response.StoreSummaryResponse;
 import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.BusinessHourRepository;
 import com.baedalsak.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,15 +45,20 @@ public class StoreQueryService {
                 .toList();
     }
 
-    // 카테고리가 없으면 전체 가게. 오늘 영업시간은 한 번에 조회한다
-    public List<StoreSummaryResponse> getStores(Category category) {
-        Sort byId = Sort.by("id");
-        List<Store> stores = category == null
-                ? storeRepository.findAll(byId)
-                : storeRepository.findAllByCategory(category, byId);
-        if (stores.isEmpty()) {
-            return List.of();
+    // 카테고리가 없으면 전체 가게. id 순 커서 조회로, size + 1 개를 읽어 다음 페이지 여부를 판단한다 (count 쿼리 없음)
+    // 오늘 영업시간은 그 페이지 가게만 한 번에 조회한다
+    public CursorResponse<StoreSummaryResponse> getStores(Category category, Long cursor, int size) {
+        long after = cursor == null ? 0L : cursor;
+        Limit limit = Limit.of(size + 1);
+        List<Store> fetched = category == null
+                ? storeRepository.findByIdGreaterThanOrderByIdAsc(after, limit)
+                : storeRepository.findByCategoryAndIdGreaterThanOrderByIdAsc(category, after, limit);
+        if (fetched.isEmpty()) {
+            return CursorResponse.last(List.of());
         }
+
+        boolean hasNext = fetched.size() > size;
+        List<Store> stores = hasNext ? fetched.subList(0, size) : fetched;
 
         LocalDateTime now = LocalDateTime.now(clock);
         short today = BusinessHour.toDbValue(now.getDayOfWeek());
@@ -60,10 +66,14 @@ public class StoreQueryService {
                 .findAllByStoreIdInAndDayOfWeek(stores.stream().map(Store::getId).toList(), today).stream()
                 .collect(Collectors.toMap(BusinessHour::getStoreId, Function.identity()));
 
-        return stores.stream()
+        List<StoreSummaryResponse> content = stores.stream()
                 .map(store -> StoreSummaryResponse.of(store, todayHours.get(store.getId()), now.toLocalTime(),
                         imageProperties))
                 .toList();
+        if (!hasNext) {
+            return CursorResponse.last(content);
+        }
+        return CursorResponse.next(content, String.valueOf(stores.getLast().getId()));
     }
 
     public StoreDetailResponse getStore(Long storeId) {
