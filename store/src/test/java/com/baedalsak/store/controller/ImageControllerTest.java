@@ -142,9 +142,9 @@ class ImageControllerTest extends IntegrationTest {
             mockMvc.perform(get("/v1/stores/1"))
                     .andExpect(jsonPath("$.imageUrl").value("https://baedalsak.click/images/" + MY_KEY));
             mockMvc.perform(get("/v1/stores"))
-                    .andExpect(jsonPath("$[0].imageKey").value(MY_KEY))
-                    .andExpect(jsonPath("$[0].imageUrl").value("https://baedalsak.click/images/" + MY_KEY))
-                    .andExpect(jsonPath("$[1].imageUrl").value(nullValue()));
+                    .andExpect(jsonPath("$.content[0].imageKey").value(MY_KEY))
+                    .andExpect(jsonPath("$.content[0].imageUrl").value("https://baedalsak.click/images/" + MY_KEY))
+                    .andExpect(jsonPath("$.content[1].imageUrl").value(nullValue()));
             mockMvc.perform(owner(get("/v1/stores/me"), OWNER_ID))
                     .andExpect(jsonPath("$.imageKey").value(MY_KEY));
             mockMvc.perform(owner(patch("/v1/stores/1/status"), OWNER_ID).content("{\"operationStatus\":\"OPEN\"}"))
