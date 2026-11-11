@@ -976,6 +976,39 @@ class OrderControllerTest extends IntegrationTest {
         }
     }
 
+    @Nested
+    class 내부_진행_중_주문_수 {
+
+        @Test
+        void 결제완료_조리중_배달중만_센다() throws Exception {
+            for (int i = 0; i < 7; i++) {
+                placeOrder(CUSTOMER_ID);
+            }
+            // 1 결제대기(그대로) · 2 결제완료 · 3 조리중 · 4 배달중 · 5 배달완료 · 6 주문거절 · 7 결제만료
+            setStatus(2, "PAID");
+            setStatus(3, "COOKING");
+            setStatus(4, "DELIVERING");
+            setStatus(5, "DELIVERED");
+            setStatus(6, "REJECTED");
+            setStatus(7, "PAYMENT_EXPIRED");
+
+            // 인증 헤더 없이 호출
+            mockMvc.perform(get("/internal/orders/active-count").param("storeId", "1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(3));
+        }
+
+        @Test
+        void 다른_가게_주문은_세지_않는다() throws Exception {
+            placeOrder(CUSTOMER_ID);
+            setStatus(1, "COOKING");
+
+            mockMvc.perform(get("/internal/orders/active-count").param("storeId", "2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(0));
+        }
+    }
+
     // 결제 완료 등은 payment 이벤트(#32)로 바뀌므로 테스트에서는 DB 를 직접 바꾼다
     private void setStatus(long orderId, String status) {
         jdbcTemplate.update("UPDATE orders.orders SET status = ? WHERE id = ?", status, orderId);
