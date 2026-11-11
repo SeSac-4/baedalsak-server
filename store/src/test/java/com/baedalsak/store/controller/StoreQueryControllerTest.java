@@ -4,6 +4,8 @@ import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.store.support.IntegrationTest;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -40,17 +42,20 @@ class StoreQueryControllerTest extends IntegrationTest {
 
             mockMvc.perform(get("/v1/stores"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(2))
-                    .andExpect(jsonPath("$[0].name").value("싹분식"))
-                    .andExpect(jsonPath("$[0].isOpenNow").value(true))
-                    .andExpect(jsonPath("$[0].todayHour.dayOfWeek").value(4))
-                    .andExpect(jsonPath("$[0].todayHour.openTime").value("09:00"))
-                    .andExpect(jsonPath("$[1].name").value("싹치킨"))
-                    .andExpect(jsonPath("$[1].operationStatus").value("PAUSED"))
-                    .andExpect(jsonPath("$[1].isOpenNow").value(false))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].name").value("싹분식"))
+                    .andExpect(jsonPath("$.content[0].isOpenNow").value(true))
+                    .andExpect(jsonPath("$.content[0].todayHour.dayOfWeek").value(4))
+                    .andExpect(jsonPath("$.content[0].todayHour.openTime").value("09:00"))
+                    .andExpect(jsonPath("$.content[1].name").value("싹치킨"))
+                    .andExpect(jsonPath("$.content[1].operationStatus").value("PAUSED"))
+                    .andExpect(jsonPath("$.content[1].isOpenNow").value(false))
                     // 목록에는 주소·요일별 영업시간이 없다
-                    .andExpect(jsonPath("$[0].address").doesNotExist())
-                    .andExpect(jsonPath("$[0].businessHours").doesNotExist());
+                    .andExpect(jsonPath("$.content[0].address").doesNotExist())
+                    .andExpect(jsonPath("$.content[0].businessHours").doesNotExist())
+                    // 다음 페이지 없음
+                    .andExpect(jsonPath("$.hasNext").value(false))
+                    .andExpect(jsonPath("$.nextCursor").isEmpty());
         }
 
         @Test
@@ -60,8 +65,8 @@ class StoreQueryControllerTest extends IntegrationTest {
 
             mockMvc.perform(get("/v1/stores").param("category", "CHICKEN"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].name").value("싹치킨"));
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("싹치킨"));
         }
 
         @Test
@@ -70,12 +75,100 @@ class StoreQueryControllerTest extends IntegrationTest {
 
             mockMvc.perform(get("/v1/stores").param("category", "PIZZA"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(0));
+                    .andExpect(jsonPath("$.content.length()").value(0));
         }
 
         @Test
         void 없는_카테고리면_400() throws Exception {
             mockMvc.perform(get("/v1/stores").param("category", "BURGER"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+
+        @Test
+        void size_만큼_나눠_주고_nextCursor_로_다음_페이지를_이어서_준다() throws Exception {
+            for (long owner = 1; owner <= 5; owner++) {
+                createStore(owner, "가게" + owner, "SNACK");
+            }
+
+            mockMvc.perform(get("/v1/stores").param("size", "2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(1))
+                    .andExpect(jsonPath("$.content[1].id").value(2))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("2"));
+
+            mockMvc.perform(get("/v1/stores").param("size", "2").param("cursor", "2"))
+                    .andExpect(jsonPath("$.content[0].id").value(3))
+                    .andExpect(jsonPath("$.content[1].id").value(4))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("4"));
+
+            // 마지막 페이지: 남은 1개, 다음 없음
+            mockMvc.perform(get("/v1/stores").param("size", "2").param("cursor", "4"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(5))
+                    .andExpect(jsonPath("$.hasNext").value(false))
+                    .andExpect(jsonPath("$.nextCursor").isEmpty());
+        }
+
+        @Test
+        void 남은_가게가_size_와_딱_맞으면_다음_페이지가_없다() throws Exception {
+            createStore(1L, "가게1", "SNACK");
+            createStore(2L, "가게2", "SNACK");
+
+            mockMvc.perform(get("/v1/stores").param("size", "2"))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.hasNext").value(false))
+                    .andExpect(jsonPath("$.nextCursor").isEmpty());
+        }
+
+        @Test
+        void 카테고리로_거르면서_나눈다() throws Exception {
+            // id 1 분식, 2 치킨, 3 분식, 4 치킨, 5 분식
+            for (long owner = 1; owner <= 5; owner++) {
+                createStore(owner, "가게" + owner, owner % 2 == 1 ? "SNACK" : "CHICKEN");
+            }
+
+            mockMvc.perform(get("/v1/stores").param("category", "SNACK").param("size", "2"))
+                    .andExpect(jsonPath("$.content[0].id").value(1))
+                    .andExpect(jsonPath("$.content[1].id").value(3))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("3"));
+
+            mockMvc.perform(get("/v1/stores").param("category", "SNACK").param("size", "2").param("cursor", "3"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(5))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void 마지막_가게_뒤의_cursor_면_빈_목록() throws Exception {
+            createStore(1L, "가게1", "SNACK");
+
+            mockMvc.perform(get("/v1/stores").param("cursor", "1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(0))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void size_를_안_주면_20개씩() throws Exception {
+            for (long owner = 1; owner <= 21; owner++) {
+                createStore(owner, "가게" + owner, "SNACK");
+            }
+
+            mockMvc.perform(get("/v1/stores"))
+                    .andExpect(jsonPath("$.content.length()").value(20))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("20"));
+        }
+
+        @ParameterizedTest
+        @CsvSource({"size, 0", "size, 101", "size, abc", "cursor, 0", "cursor, -1", "cursor, abc"})
+        void 잘못된_size_나_cursor_면_400(String name, String value) throws Exception {
+            mockMvc.perform(get("/v1/stores").param(name, value))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         }
