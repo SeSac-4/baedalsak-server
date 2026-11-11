@@ -3,7 +3,6 @@ package com.baedalsak.member.config;
 import java.time.Duration;
 
 import org.aopalliance.intercept.MethodInterceptor;
-import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.DirectExchange;
@@ -13,13 +12,15 @@ import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.retry.RetryPolicy;
+
+import com.baedalsak.common.messaging.ListenerErrorHandler;
+import com.baedalsak.common.messaging.ListenerFailureRecoverer;
 
 /**
  * 주문·배달 알림 문자 큐 (#182). member 는 이벤트를 발행하지 않고 구독만 한다.
@@ -90,13 +91,14 @@ public class RabbitConfig {
     factory.setMaxConcurrentConsumers(1);
     factory.setPrefetchCount(1);
     factory.setAdviceChain(smsRetryInterceptor());
+    factory.setErrorHandler(new ListenerErrorHandler());
     return factory;
   }
 
   static MethodInterceptor smsRetryInterceptor() {
     return RetryInterceptorBuilder.stateless()
         .retryPolicy(smsRetryPolicy())
-        .recoverer(new RejectAndDontRequeueRecoverer())   // 다 실패하면 requeue 하지 않고 거부 → DLQ
+        .recoverer(new ListenerFailureRecoverer())   // 다 실패하면 requeue 하지 않고 거부 → DLQ
         .build();
   }
 
@@ -110,16 +112,11 @@ public class RabbitConfig {
         .build();
   }
 
-  // 원인 중 하나라도 "영구 오류"면 재시도하지 않는다 (예: 이벤트 ID 가 없어 중복 방지 불가)
+  // 영구 오류(이벤트 ID 없음 · JSON 깨짐)는 재시도하지 않는다. 판단은 common 처리기와 같은 규칙 (#186)
   static boolean isRetryable(Throwable error) {
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-      if (cause instanceof AmqpRejectAndDontRequeueException) {
-        return false;
-      }
-    }
-    return true;
+    return !ListenerFailureRecoverer.isPermanent(error);
   }
-
+  
   // 메시지 본문 JSON (Jackson 3). 모르는 필드는 무시 → 발행 쪽이 필드를 추가해도 member 는 깨지지 않음
   @Bean
   MessageConverter jsonMessageConverter() {

@@ -8,4 +8,13 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-starter-webmvc'
     // ConstraintViolationException(@PathVariable·@RequestParam 검증) 처리용. webmvc 서비스는 모두 validation 을 이미 씀
     compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    // 리스너 실패 처리기(messaging 패키지)용. 실제 라이브러리는 RabbitMQ 를 쓰는 서비스(member·order·payment·delivery)가 제공 (#186)
+    compileOnly 'org.springframework.boot:spring-boot-starter-amqp'
+
+    // 테스트에서만 실제 라이브러리를 올린다 (common 은 실행 모듈이 아니라 서비스 모듈의 공통 설정을 받지 않음) (#186)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.springframework.boot:spring-boot-starter-amqp'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
