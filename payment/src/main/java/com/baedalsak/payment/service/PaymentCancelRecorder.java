@@ -70,7 +70,8 @@ public class PaymentCancelRecorder {
     paymentCancelRepository.markDone(cancel.getId(), transactionKey, canceledAt,
         List.of(PaymentCancelStatus.PENDING, PaymentCancelStatus.FAILED), PaymentCancelStatus.DONE);
     outboxAppender.append(PaymentCanceledEvent.TYPE, PaymentCanceledEvent.ROUTING_KEY, payment.getId(),
-        new PaymentCanceledEvent(payment.getId(), payment.getOrderId(), cancel.getAmount(), canceledAt));
+        new PaymentCanceledEvent(payment.getId(), payment.getOrderId(), cancel.getAmount(), canceledAt,
+            payment.getCustomerEmail(), payment.getStoreName(), cancel.getRequestedBy().name()));
     markProcessed(messageId);
     return true;
   }
