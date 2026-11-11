@@ -33,6 +33,8 @@ public class RabbitConfig {
   public static final String EVENTS_EXCHANGE = "baedalsak.events";
   public static final String DEAD_LETTER_EXCHANGE = "payment.dlx";
   public static final String PAYMENT_APPROVED_MAIL_QUEUE = "payment.mail.payment-approved";
+  // 환불 완료 메일 큐 (#180). PaymentCanceled 를 order 와 따로 받는다
+  public static final String PAYMENT_CANCELED_MAIL_QUEUE = "payment.mail.payment-canceled";
   // 결제 취소 명령 큐 (#127). 명령은 조정자(order)가 보내고 받는 payment 가 선언한다
   public static final String CANCEL_COMMAND_QUEUE = "payment.command.cancel";
   public static final String CANCEL_COMMAND_ROUTING_KEY = "command.payment.cancel";
@@ -63,6 +65,21 @@ public class RabbitConfig {
     return new Declarables(main, dlq,
         BindingBuilder.bind(main).to(new TopicExchange(EVENTS_EXCHANGE)).with("payment.approved"),
         BindingBuilder.bind(dlq).to(new DirectExchange(DEAD_LETTER_EXCHANGE)).with(PAYMENT_APPROVED_MAIL_QUEUE));
+  }
+
+  // 환불 완료 메일 큐 + DLQ (#180). 결제완료 메일 큐와 같은 규칙
+  @Bean
+  Declarables paymentCanceledMailQueues() {
+    Queue main = QueueBuilder.durable(PAYMENT_CANCELED_MAIL_QUEUE)
+        .quorum()
+        .deliveryLimit(3)
+        .deadLetterExchange(DEAD_LETTER_EXCHANGE)
+        .deadLetterRoutingKey(PAYMENT_CANCELED_MAIL_QUEUE)
+        .build();
+    Queue dlq = QueueBuilder.durable(PAYMENT_CANCELED_MAIL_QUEUE + ".dlq").quorum().build();
+    return new Declarables(main, dlq,
+        BindingBuilder.bind(main).to(new TopicExchange(EVENTS_EXCHANGE)).with("payment.canceled"),
+        BindingBuilder.bind(dlq).to(new DirectExchange(DEAD_LETTER_EXCHANGE)).with(PAYMENT_CANCELED_MAIL_QUEUE));
   }
 
   // 결제 취소 명령 큐 + DLQ (#127, 둘 다 quorum). deliveryLimit 3 · DLX 는 메일 큐와 같음. DLQ 는 수동 확인 (재처리 API 대상)

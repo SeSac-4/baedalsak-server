@@ -40,7 +40,7 @@ class SesMailSenderTest {
     @BeforeEach
     void setUp() {
         PaymentMailProperties properties = new PaymentMailProperties("ap-northeast-2", "no-reply@baedalsak.click",
-                new PaymentMailProperties.Templates("customer-template", "owner-template"));
+                new PaymentMailProperties.Templates("customer-template", "owner-template", "canceled-customer-template"));
         sesMailSender = new SesMailSender(sesClient, properties, renderer);
     }
 
