@@ -111,6 +111,7 @@ payment-mail:
   templates:
     customer: payment-approved-customer           # 고객 결제완료 메일
     owner: payment-approved-owner                 # 사장님 새 주문 메일
+    canceled-customer: payment-canceled-customer  # 고객 환불 완료 메일 (#180)
 
 # 토스페이먼츠 결제 승인 (설계서 '동기 호출' 탭, N1.4: 5초 타임아웃, 재시도 없음)
 toss:

@@ -34,6 +34,22 @@ class MailTemplateRendererTest {
     }
 
     @Test
+    void 환불_완료_템플릿은_사유_한_줄과_환불_금액_시각을_채운다() {
+        Map<String, String> data = new HashMap<>();
+        data.put("orderId", "1005");
+        data.put("storeName", "싹분식");
+        data.put("amount", "18,000원");
+        data.put("canceledAt", "2026-11-11 15:30");
+        data.put("reason", "가게 사정으로 주문이 거절되어");
+
+        RenderedMail mail = renderer.render("payment-canceled-customer", data);
+
+        assertThat(mail.subject()).isEqualTo("[배달싹] 환불이 완료되었어요");
+        assertThat(mail.html()).contains("1005", "싹분식", "18,000원", "2026-11-11 15:30",
+                "가게 사정으로 주문이 거절되어 결제 금액을 환불했어요.").doesNotContain("{{");
+    }
+
+    @Test
     void 값의_HTML_특수문자는_이스케이프한다() {
         Map<String, String> data = data();
         data.put("storeName", "<b>싹&분식</b>");

@@ -76,6 +76,7 @@ class PaymentCancelRecorderTest {
 
     @Test
     void 완료는_환불_완료_취소_완료_PaymentCanceled_processed_event_를_함께_쓴다() {
+        // PaymentCanceled 에는 환불 완료 메일용 고객 메일 · 가게명 · 요청자도 담는다 (#180)
         PaymentCancel cancel = cancel();
         given(paymentRepository.changeStatus(7L, PaymentStatus.CANCEL_REQUESTED, PaymentStatus.CANCELED)).willReturn(1);
 
@@ -84,7 +85,7 @@ class PaymentCancelRecorderTest {
         verify(paymentCancelRepository).markDone(3L, "tx_1", CANCELED_AT,
                 List.of(PaymentCancelStatus.PENDING, PaymentCancelStatus.FAILED), PaymentCancelStatus.DONE);
         verify(outboxAppender).append(PaymentCanceledEvent.TYPE, "payment.canceled", 7L,
-                new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT));
+                new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT, "customer@test.com", "싹분식", "OWNER"));
         verify(processedEventRepository).insertIfAbsent(MESSAGE_ID, "CancelPayment");
     }
 
@@ -123,7 +124,7 @@ class PaymentCancelRecorderTest {
         assertThat(recorder.complete(payment(), cancel(), "tx_1", CANCELED_AT, null)).isTrue();
 
         verify(outboxAppender).append(PaymentCanceledEvent.TYPE, "payment.canceled", 7L,
-                new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT));
+                new PaymentCanceledEvent(7L, 1005L, 18000, CANCELED_AT, "customer@test.com", "싹분식", "OWNER"));
         verifyNoInteractions(processedEventRepository);
     }
 
