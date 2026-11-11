@@ -175,6 +175,108 @@ class StoreQueryControllerTest extends IntegrationTest {
     }
 
     @Nested
+    class 가게_이름_검색 {
+
+        @Test
+        void 이름에_검색어가_들어간_가게만_준다() throws Exception {
+            createStore(1L, "신당동떡볶이", "SNACK");
+            createStore(2L, "바삭치킨", "CHICKEN");
+            createStore(3L, "국물떡볶이", "SNACK");
+
+            mockMvc.perform(get("/v1/stores").param("q", "떡볶이"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].name").value("신당동떡볶이"))
+                    .andExpect(jsonPath("$.content[1].name").value("국물떡볶이"))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void 대소문자를_구분하지_않는다() throws Exception {
+            createStore(1L, "Pizza School", "PIZZA");
+
+            mockMvc.perform(get("/v1/stores").param("q", "pizza"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("Pizza School"));
+        }
+
+        @Test
+        void 맞는_가게가_없으면_빈_목록() throws Exception {
+            createStore(1L, "바삭치킨", "CHICKEN");
+
+            mockMvc.perform(get("/v1/stores").param("q", "피자"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(0))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void 카테고리와_함께_거른다() throws Exception {
+            createStore(1L, "치킨떡볶이", "SNACK");
+            createStore(2L, "바삭치킨", "CHICKEN");
+
+            mockMvc.perform(get("/v1/stores").param("q", "치킨").param("category", "CHICKEN"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("바삭치킨"));
+        }
+
+        @Test
+        void 검색_결과도_커서로_나눈다() throws Exception {
+            // id 1 떡볶이1, 2 치킨, 3 떡볶이2, 4 떡볶이3
+            createStore(1L, "떡볶이1", "SNACK");
+            createStore(2L, "치킨", "CHICKEN");
+            createStore(3L, "떡볶이2", "SNACK");
+            createStore(4L, "떡볶이3", "SNACK");
+
+            mockMvc.perform(get("/v1/stores").param("q", "떡볶이").param("size", "2"))
+                    .andExpect(jsonPath("$.content[0].id").value(1))
+                    .andExpect(jsonPath("$.content[1].id").value(3))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("3"));
+
+            mockMvc.perform(get("/v1/stores").param("q", "떡볶이").param("size", "2").param("cursor", "3"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(4))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void 앞뒤_공백은_지우고_공백만이면_전체() throws Exception {
+            createStore(1L, "떡볶이", "SNACK");
+            createStore(2L, "치킨", "CHICKEN");
+
+            mockMvc.perform(get("/v1/stores").param("q", "  떡볶이  "))
+                    .andExpect(jsonPath("$.content.length()").value(1));
+            mockMvc.perform(get("/v1/stores").param("q", "   "))
+                    .andExpect(jsonPath("$.content.length()").value(2));
+        }
+
+        @Test
+        void 퍼센트와_밑줄은_와일드카드가_아니라_글자로_찾는다() throws Exception {
+            createStore(1L, "100%치킨", "CHICKEN");
+            createStore(2L, "1000치킨", "CHICKEN");
+            createStore(3L, "a_b분식", "SNACK");
+            createStore(4L, "axb분식", "SNACK");
+
+            mockMvc.perform(get("/v1/stores").param("q", "%"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("100%치킨"));
+            mockMvc.perform(get("/v1/stores").param("q", "a_b"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("a_b분식"));
+        }
+
+        @Test
+        void 검색어가_50자를_넘으면_400() throws Exception {
+            mockMvc.perform(get("/v1/stores").param("q", "가".repeat(51)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+            mockMvc.perform(get("/v1/stores").param("q", "가".repeat(50)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Nested
     class 가게_목록_통계 {
 
         @Test
