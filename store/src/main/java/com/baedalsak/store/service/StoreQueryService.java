@@ -49,12 +49,11 @@ public class StoreQueryService {
 
     // 카테고리가 없으면 전체 가게. id 순 커서 조회로, size + 1 개를 읽어 다음 페이지 여부를 판단한다 (count 쿼리 없음)
     // 오늘 영업시간은 그 페이지 가게만 한 번에 조회한다
-    public CursorResponse<StoreSummaryResponse> getStores(Category category, Long cursor, int size) {
+    // q 가 있으면 가게 이름 부분 일치 검색 (#178). 앞뒤 공백은 지우고, 공백만이면 검색어 없음
+    public CursorResponse<StoreSummaryResponse> getStores(Category category, String q, Long cursor, int size) {
         long after = cursor == null ? 0L : cursor;
         Limit limit = Limit.of(size + 1);
-        List<Store> fetched = category == null
-                ? storeRepository.findByIdGreaterThanOrderByIdAsc(after, limit)
-                : storeRepository.findByCategoryAndIdGreaterThanOrderByIdAsc(category, after, limit);
+        List<Store> fetched = findStores(category, normalize(q), after, limit);
         if (fetched.isEmpty()) {
             return CursorResponse.last(List.of());
         }
@@ -76,6 +75,25 @@ public class StoreQueryService {
             return CursorResponse.last(content);
         }
         return CursorResponse.next(content, String.valueOf(stores.getLast().getId()));
+    }
+
+    private List<Store> findStores(Category category, String name, long after, Limit limit) {
+        if (name == null) {
+            return category == null
+                    ? storeRepository.findByIdGreaterThanOrderByIdAsc(after, limit)
+                    : storeRepository.findByCategoryAndIdGreaterThanOrderByIdAsc(category, after, limit);
+        }
+        return category == null
+                ? storeRepository.findByNameContainingIgnoreCaseAndIdGreaterThanOrderByIdAsc(name, after, limit)
+                : storeRepository.findByCategoryAndNameContainingIgnoreCaseAndIdGreaterThanOrderByIdAsc(
+                        category, name, after, limit);
+    }
+
+    private static String normalize(String q) {
+        if (q == null || q.isBlank()) {
+            return null;
+        }
+        return q.strip();
     }
 
     // 가게 목록 통계 (#169). 카테고리별 집계 1번 + 영업 중 수 1번, 가게 수와 무관하게 쿼리 2개

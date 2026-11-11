@@ -21,6 +21,12 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     List<Store> findByCategoryAndIdGreaterThanOrderByIdAsc(Category category, Long cursor, Limit limit);
 
+    // 가게 이름 검색 (#178): 부분 일치 · 대소문자 무시. Containing 은 Spring Data 가 % · _ · \ 를 이스케이프한다
+    List<Store> findByNameContainingIgnoreCaseAndIdGreaterThanOrderByIdAsc(String name, Long cursor, Limit limit);
+
+    List<Store> findByCategoryAndNameContainingIgnoreCaseAndIdGreaterThanOrderByIdAsc(
+            Category category, String name, Long cursor, Limit limit);
+
     // 가게 목록 통계 (#169): 카테고리별 [category, 가게 수, 최저 배달비]
     @Query("SELECT s.category, COUNT(s), MIN(s.deliveryFee) FROM Store s GROUP BY s.category")
     List<Object[]> countAndMinDeliveryFeeByCategory();

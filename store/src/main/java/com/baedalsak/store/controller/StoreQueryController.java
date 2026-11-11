@@ -10,6 +10,7 @@ import com.baedalsak.store.dto.response.StoreSummaryResponse;
 import com.baedalsak.store.service.StoreQueryService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,12 +29,14 @@ public class StoreQueryController {
     private final StoreQueryService storeQueryService;
 
     // 1.1.1 가게 목록 (무한 스크롤, #169). category 가 없으면 전체, 없는 카테고리 값이면 400
-    //   cursor: 이전 응답의 nextCursor (없으면 처음부터), size: 기본 20·최대 100
+    //   q: 가게 이름 검색 (#178, 부분 일치 · 대소문자 무시, 최대 50자), cursor: 이전 응답의 nextCursor (없으면 처음부터),
+    //   size: 기본 20·최대 100
     @GetMapping
     public CursorResponse<StoreSummaryResponse> getStores(@RequestParam(required = false) Category category,
+                                                          @RequestParam(required = false) @Size(max = 50) String q,
                                                           @RequestParam(required = false) @Min(1) Long cursor,
                                                           @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return storeQueryService.getStores(category, cursor, size);
+        return storeQueryService.getStores(category, q, cursor, size);
     }
 
     // 가게 목록 통계 (#169): 홈 배너(영업 중 수 · 최저 배달비), PC 카테고리 타일(가게 수)
