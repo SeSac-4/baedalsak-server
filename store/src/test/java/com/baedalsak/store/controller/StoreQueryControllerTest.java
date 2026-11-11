@@ -175,6 +175,43 @@ class StoreQueryControllerTest extends IntegrationTest {
     }
 
     @Nested
+    class 가게_목록_통계 {
+
+        @Test
+        void 전체_카테고리별_가게_수_영업_중_수_최저_배달비를_준다() throws Exception {
+            createStore(10L, "싹분식", "SNACK", 2000);
+            createStore(20L, "싹분식2", "SNACK", 0);
+            createStore(30L, "싹치킨", "CHICKEN", 3000);
+            // 영업 중은 운영 상태 OPEN + 오늘 영업시간 안 (기준 12:00, 기본 09:00~22:00) → 1, 3번 가게
+            open(10L, 1L);
+            open(30L, 3L);
+
+            mockMvc.perform(get("/v1/stores/summary"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalCount").value(3))
+                    .andExpect(jsonPath("$.openCount").value(2))
+                    .andExpect(jsonPath("$.minDeliveryFee").value(0))
+                    .andExpect(jsonPath("$.categoryCounts.SNACK").value(2))
+                    .andExpect(jsonPath("$.categoryCounts.CHICKEN").value(1))
+                    // 가게가 없는 카테고리도 0 으로 6개 모두
+                    .andExpect(jsonPath("$.categoryCounts.length()").value(6))
+                    .andExpect(jsonPath("$.categoryCounts.KOREAN").value(0))
+                    .andExpect(jsonPath("$.categoryCounts.CAFE_DESSERT").value(0));
+        }
+
+        @Test
+        void 가게가_없으면_0_이고_최저_배달비는_null() throws Exception {
+            mockMvc.perform(get("/v1/stores/summary"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalCount").value(0))
+                    .andExpect(jsonPath("$.openCount").value(0))
+                    .andExpect(jsonPath("$.minDeliveryFee").isEmpty())
+                    .andExpect(jsonPath("$.categoryCounts.length()").value(6))
+                    .andExpect(jsonPath("$.categoryCounts.PIZZA").value(0));
+        }
+    }
+
+    @Nested
     class 가게_상세 {
 
         @Test
@@ -230,9 +267,13 @@ class StoreQueryControllerTest extends IntegrationTest {
     }
 
     private void createStore(long ownerId, String name, String category) throws Exception {
+        createStore(ownerId, name, category, 3000);
+    }
+
+    private void createStore(long ownerId, String name, String category, int deliveryFee) throws Exception {
         String body = """
-                {"name":"%s","category":"%s","address":"서울시 마포구 1","minOrderAmount":12000,"deliveryFee":3000}
-                """.formatted(name, category);
+                {"name":"%s","category":"%s","address":"서울시 마포구 1","minOrderAmount":12000,"deliveryFee":%d}
+                """.formatted(name, category, deliveryFee);
         mockMvc.perform(owner(post("/v1/stores"), ownerId).content(body))
                 .andExpect(status().isCreated());
     }
