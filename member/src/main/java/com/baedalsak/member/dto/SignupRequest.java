@@ -9,4 +9,5 @@ public interface SignupRequest {
   String password();
   String name();
   String phone();
+  String phoneVerificationToken();   // 휴대폰 인증 완료 표 (#164). 없으면 미인증 가입 (스위치가 켜지면 필수)
 }

@@ -120,3 +120,5 @@ cognito:
 sms:
   sender: ${SMS_SENDER:sns}
   region: ${AWS_REGION:ap-northeast-2}
+  # 가입 때 휴대폰 인증 필수 여부. SMS 샌드박스(팀원 번호만 수신) 동안은 false = 건너뛰기 허용
+  verification-required: ${PHONE_VERIFICATION_REQUIRED:false}

@@ -12,6 +12,7 @@ import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.common.error.ErrorResponse.FieldErrorDetail;
 import com.baedalsak.member.auth.PhoneVerificationStore;
+import com.baedalsak.member.config.SmsProperties;
 import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.error.MemberErrorCode;
 import com.baedalsak.member.repository.MemberRepository;
@@ -20,8 +21,11 @@ import com.baedalsak.member.sms.SmsSender;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 내 휴대폰 번호 인증 (#164, 선택 기능) — 로그인한 회원의 DB 번호로 6자리 코드 → 맞으면 phone_verified_at 기록.
- * 인증한 번호로만 배달 알림 문자를 보낸다 (#182).
+ * 휴대폰 번호 인증 (#164) — 6자리 코드 문자 → 입력 → 맞으면 인증. 인증한 번호로만 알림 문자를 보낸다 (#182).
+ * 입구 두 개:
+ *   가입 전  : 번호로 코드 → 맞으면 "인증 완료 표"(10분, 1회용) → 가입 요청에 실어 보내면 가입과 동시에 인증 기록
+ *   가입 후  : 로그인한 회원의 DB 번호로 코드 → 맞으면 phone_verified_at 기록 (가입 때 건너뛴 사람 · 기존 회원)
+ * 가입 때 인증 필수 여부는 sms.verification-required (SMS 샌드박스 동안 false = 건너뛰기 허용)
  * 규칙: 코드 3분 · 5번 틀리면 폐기 · 재발송 60초 간격 · 번호당 하루 5통
  */
 @Service
@@ -35,6 +39,42 @@ public class PhoneVerificationService {
   private final PhoneVerificationStore store;
   private final SmsSender smsSender;
   private final MemberRepository memberRepository;
+  private final SmsProperties props;
+
+  // ---------- 가입 전 (로그인 없음) ----------
+
+  /** 가입 화면: 입력한 번호로 인증번호 문자를 보낸다 */
+  public void sendSignupCode(String rawPhone) {
+    sendTo(normalize(rawPhone));
+  }
+
+  /** 가입 화면: 코드를 확인하고, 맞으면 가입 요청에 실을 인증 완료 표를 돌려준다 */
+  public String verifySignupCode(String rawPhone, String code) {
+    String phone = normalize(rawPhone);
+    checkCode(phone, code);
+    return store.saveVerified(phone);
+  }
+
+  /**
+   * 가입 처리 중 호출: 표가 이 번호 것이면 true (인증된 회원으로 가입).
+   * 표가 없으면 스위치가 켜졌을 때만 400, 꺼져 있으면 false (미인증으로 가입). 표가 틀리면 항상 400.
+   */
+  public boolean confirmSignupToken(String rawPhone, String token) {
+    if (token == null || token.isBlank()) {
+      if (props.verificationRequired()) {
+        throw tokenInvalid();
+      }
+      return false;
+    }
+    String phone = normalize(rawPhone);
+    boolean ok = store.consumeVerified(token).map(phone::equals).orElse(false);
+    if (!ok) {
+      throw tokenInvalid();   // 만료 · 이미 사용 · 다른 번호의 표
+    }
+    return true;
+  }
+
+  // ---------- 가입 후 (내 정보) ----------
 
   /** 내 번호로 인증번호 문자를 보낸다. 이미 인증했으면 409 (문자 비용 아끼기) */
   public void sendCode(long memberId) {
@@ -42,8 +82,23 @@ public class PhoneVerificationService {
     if (member.isPhoneVerified()) {
       throw new BusinessException(MemberErrorCode.PHONE_ALREADY_VERIFIED);
     }
-    String phone = normalize(member.getPhone());
+    sendTo(normalize(member.getPhone()));
+  }
 
+  /** 코드를 확인하고, 맞으면 회원에 인증 시각을 기록한다 */
+  @Transactional
+  public void verify(long memberId, String code) {
+    Member member = findMember(memberId);
+    if (member.isPhoneVerified()) {
+      return;   // 이미 인증됨 — 두 번 눌러도 성공으로 (같은 결과)
+    }
+    checkCode(normalize(member.getPhone()), code);
+    member.markPhoneVerified();   // 트랜잭션 끝에 UPDATE
+  }
+
+  // ---------- 공통 ----------
+
+  private void sendTo(String phone) {
     // ① 60초 간격 — 먼저 표시를 남겨서 동시에 두 번 눌러도 한 번만 통과
     if (!store.tryStartCooldown(phone)) {
       throw new BusinessException(MemberErrorCode.PHONE_CODE_COOLDOWN);
@@ -63,16 +118,9 @@ public class PhoneVerificationService {
     }
   }
 
-  /** 코드를 확인하고, 맞으면 회원에 인증 시각을 기록한다 */
-  @Transactional
-  public void verify(long memberId, String code) {
-    Member member = findMember(memberId);
-    if (member.isPhoneVerified()) {
-      return;   // 이미 인증됨 — 두 번 눌러도 성공으로 (같은 결과)
-    }
-    String phone = normalize(member.getPhone());
+  // 맞으면 코드를 지우고 끝, 틀리면 예외 (5번째면 코드 폐기 + 429)
+  private void checkCode(String phone, String code) {
     String saved = store.findCode(phone).orElseThrow(PhoneVerificationService::wrongCode);   // 없음 = 만료
-
     if (!sameCode(saved, code)) {
       if (store.incrementFail(phone) >= MAX_FAILS) {
         store.deleteCode(phone);
@@ -80,8 +128,7 @@ public class PhoneVerificationService {
       }
       throw wrongCode();
     }
-    store.deleteCode(phone);      // 한 번 맞힌 코드는 다시 못 씀
-    member.markPhoneVerified();   // 트랜잭션 끝에 UPDATE
+    store.deleteCode(phone);   // 한 번 맞힌 코드는 다시 못 씀
   }
 
   private Member findMember(long memberId) {
@@ -106,5 +153,10 @@ public class PhoneVerificationService {
   private static BusinessException wrongCode() {
     return new BusinessException(CommonErrorCode.VALIDATION_FAILED,
         List.of(new FieldErrorDetail("code", "인증번호가 올바르지 않거나 만료되었습니다.")));
+  }
+
+  private static BusinessException tokenInvalid() {
+    return new BusinessException(CommonErrorCode.VALIDATION_FAILED,
+        List.of(new FieldErrorDetail("phoneVerificationToken", "휴대폰 인증을 다시 해 주세요.")));
   }
 }

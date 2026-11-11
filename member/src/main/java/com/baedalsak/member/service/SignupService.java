@@ -43,6 +43,7 @@ public class SignupService {
   private final CognitoAuthClient cognitoAuthClient;
   private final TransactionTemplate transactionTemplate;   // Boot 가 기본으로 만들어 줌
   private final AuthService authService;
+  private final PhoneVerificationService phoneVerificationService;
 
   public LoginResult signupCustomer(SignupCustomerRequest req) {
     return signup(req, Role.CUSTOMER, memberId -> { });   // 고객은 프로필 없음
@@ -66,11 +67,18 @@ public class SignupService {
         throw new BusinessException(MemberErrorCode.EMAIL_DUPLICATED);
       }
 
+      // ①-2 휴대폰 인증 표 (#164). 이메일 중복 같은 흔한 실패 뒤에 확인해 표가 헛되이 사라지지 않게
+      //      표가 맞으면 인증된 회원으로, 없으면(건너뛰기) 미인증으로. 틀린 표는 400
+      Member member = new Member(req.email(), req.name(), req.phone(), role);
+      if (phoneVerificationService.confirmSignupToken(req.phone(), req.phoneVerificationToken())) {
+        member.markPhoneVerified();
+      }
+
       // ② member INSERT 를 지금 실행(flush)해 id 를 받는다. 커밋은 아직
       //    동시에 같은 이메일이 들어와 ①을 둘 다 통과하면 UNIQUE 제약이 막는다 → 같은 409
       long memberId;
       try {
-        memberId = memberRepository.saveAndFlush(new Member(req.email(), req.name(), req.phone(), role)).getId();
+        memberId = memberRepository.saveAndFlush(member).getId();
       } catch (DataIntegrityViolationException e) {
         throw new BusinessException(MemberErrorCode.EMAIL_DUPLICATED);
       }
