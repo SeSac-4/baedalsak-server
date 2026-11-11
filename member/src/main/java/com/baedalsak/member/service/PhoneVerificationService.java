@@ -6,18 +6,22 @@ import java.security.SecureRandom;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.common.error.ErrorResponse.FieldErrorDetail;
 import com.baedalsak.member.auth.PhoneVerificationStore;
+import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.error.MemberErrorCode;
+import com.baedalsak.member.repository.MemberRepository;
 import com.baedalsak.member.sms.SmsSender;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * 휴대폰 번호 소유 확인 (#164) — 6자리 코드 문자 → 입력 → 맞으면 "인증 완료 표"(10분, 1회용).
+ * 내 휴대폰 번호 인증 (#164, 선택 기능) — 로그인한 회원의 DB 번호로 6자리 코드 → 맞으면 phone_verified_at 기록.
+ * 인증한 번호로만 배달 알림 문자를 보낸다 (#182).
  * 규칙: 코드 3분 · 5번 틀리면 폐기 · 재발송 60초 간격 · 번호당 하루 5통
  */
 @Service
@@ -30,10 +34,15 @@ public class PhoneVerificationService {
 
   private final PhoneVerificationStore store;
   private final SmsSender smsSender;
+  private final MemberRepository memberRepository;
 
-  /** 코드를 만들어 문자로 보낸다 */
-  public void sendCode(String rawPhone) {
-    String phone = normalize(rawPhone);
+  /** 내 번호로 인증번호 문자를 보낸다. 이미 인증했으면 409 (문자 비용 아끼기) */
+  public void sendCode(long memberId) {
+    Member member = findMember(memberId);
+    if (member.isPhoneVerified()) {
+      throw new BusinessException(MemberErrorCode.PHONE_ALREADY_VERIFIED);
+    }
+    String phone = normalize(member.getPhone());
 
     // ① 60초 간격 — 먼저 표시를 남겨서 동시에 두 번 눌러도 한 번만 통과
     if (!store.tryStartCooldown(phone)) {
@@ -54,9 +63,14 @@ public class PhoneVerificationService {
     }
   }
 
-  /** 코드를 확인하고, 맞으면 가입 때 낼 인증 완료 표를 돌려준다 */
-  public String verify(String rawPhone, String code) {
-    String phone = normalize(rawPhone);
+  /** 코드를 확인하고, 맞으면 회원에 인증 시각을 기록한다 */
+  @Transactional
+  public void verify(long memberId, String code) {
+    Member member = findMember(memberId);
+    if (member.isPhoneVerified()) {
+      return;   // 이미 인증됨 — 두 번 눌러도 성공으로 (같은 결과)
+    }
+    String phone = normalize(member.getPhone());
     String saved = store.findCode(phone).orElseThrow(PhoneVerificationService::wrongCode);   // 없음 = 만료
 
     if (!sameCode(saved, code)) {
@@ -66,22 +80,17 @@ public class PhoneVerificationService {
       }
       throw wrongCode();
     }
-    store.deleteCode(phone);   // 한 번 맞힌 코드는 다시 못 씀
-    return store.saveVerified(phone);
+    store.deleteCode(phone);      // 한 번 맞힌 코드는 다시 못 씀
+    member.markPhoneVerified();   // 트랜잭션 끝에 UPDATE
   }
 
-  /** 가입(3단계)에서 호출: 표가 이 번호 것인지 확인하고 표를 없앤다. 아니면 400 */
-  public void confirmVerified(String rawPhone, String token) {
-    String phone = normalize(rawPhone);
-    boolean ok = token != null && store.consumeVerified(token).map(phone::equals).orElse(false);
-    if (!ok) {
-      throw new BusinessException(CommonErrorCode.VALIDATION_FAILED,
-          List.of(new FieldErrorDetail("phoneVerificationToken", "휴대폰 인증을 먼저 완료해 주세요.")));
-    }
+  private Member findMember(long memberId) {
+    return memberRepository.findById(memberId)
+        .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
   }
 
   static String normalize(String phone) {
-    return phone.replaceAll("\\D", "");   // 010-1234-5678 → 01012345678
+    return phone.replaceAll("\\D", "");   // 010-1234-5678 → 01012345678 (Redis 키를 하나로)
   }
 
   private static String newCode() {

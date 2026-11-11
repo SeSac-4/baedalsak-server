@@ -1,11 +1,10 @@
 package com.baedalsak.member.auth;
 
-import java.security.SecureRandom;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -25,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
  *   phone:fail:{번호}            = 틀린 횟수    3분
  *   phone:cooldown:{번호}        = 1           60초 (재발송 간격)
  *   phone:daily:{번호}:{날짜}     = 보낸 횟수    1일
- *   phone:verified:{토큰}        = 번호        10분 (가입 때 한 번 쓰고 지움)
  * Redis 장애면 503 — 인증을 건너뛰고 통과시키지 않는다 (fail-closed)
  */
 @Slf4j
@@ -36,11 +34,9 @@ public class PhoneVerificationStore {
   public static final Duration CODE_TTL = Duration.ofMinutes(3);
   public static final Duration COOLDOWN_TTL = Duration.ofSeconds(60);
   public static final Duration DAILY_TTL = Duration.ofDays(1);
-  public static final Duration VERIFIED_TTL = Duration.ofMinutes(10);
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;   // 20261111
-  private static final SecureRandom RANDOM = new SecureRandom();
 
   private final StringRedisTemplate redis;
 
@@ -83,20 +79,6 @@ public class PhoneVerificationStore {
     call("코드 삭제", () -> redis.delete(java.util.List.of("phone:code:" + phone, "phone:fail:" + phone)));
   }
 
-  /** 인증 완료 표를 만들어 저장하고 표(무작위 문자열)를 돌려준다 */
-  public String saveVerified(String phone) {
-    String token = newToken();
-    call("인증 완료 저장", () -> {
-      redis.opsForValue().set("phone:verified:" + token, phone, VERIFIED_TTL);
-      return null;
-    });
-    return token;
-  }
-
-  /** 표를 꺼내면서 지운다 (한 번만 쓸 수 있게). 없거나 만료면 empty */
-  public Optional<String> consumeVerified(String token) {
-    return call("인증 완료 확인", () -> Optional.ofNullable(redis.opsForValue().getAndDelete("phone:verified:" + token)));
-  }
 
   // INCR 후 처음 만든 키(값 1)에만 TTL 을 건다 — 매번 걸면 만료가 계속 밀림
   private long increment(String key, Duration ttl) {
@@ -115,11 +97,5 @@ public class PhoneVerificationStore {
       log.warn("휴대폰 인증 Redis 실패: {}", what, e);
       throw new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
     }
-  }
-
-  private String newToken() {
-    byte[] bytes = new byte[32];
-    RANDOM.nextBytes(bytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 }

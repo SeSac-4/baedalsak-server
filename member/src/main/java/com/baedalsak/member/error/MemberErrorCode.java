@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum MemberErrorCode implements ErrorCode {
 
+    PHONE_ALREADY_VERIFIED(409, "이미 인증된 휴대폰 번호입니다."),
+
     EMAIL_DUPLICATED(409, "이미 가입된 이메일입니다."),
 
     // 휴대폰 인증 (#164)
