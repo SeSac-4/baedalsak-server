@@ -121,4 +121,6 @@ sms:
   sender: ${SMS_SENDER:sns}
   region: ${AWS_REGION:ap-northeast-2}
   # 가입 때 휴대폰 인증 필수 여부. SMS 샌드박스(팀원 번호만 수신) 동안은 false = 건너뛰기 허용
-  verification-required: ${PHONE_VERIFICATION_REQUIRED:false}
+  verification-required: ${PHONE_VERIFICATION_REQUIRED:false}  
+  # 주문·배달 알림 문자 (#182). 휴대폰 인증한 고객에게만 감. 월 한도 1달러라 필요하면 false 로 끔
+  notification-enabled: ${SMS_NOTIFICATION_ENABLED:true}
