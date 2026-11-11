@@ -24,7 +24,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * 요청 제한 (#24, 설계서 API 명세 429). 요청을 묶음으로 나눠 1분 단위로 센다.
- *   auth     : POST 로그인·가입           → IP 당 authPerIp
+ *   auth     : POST 로그인·가입·비밀번호·가입 휴대폰 인증 → IP 당 authPerIp
  *   payment  : POST 주문 생성·결제 확인    → 회원 당 paymentPerMember (설계서 v10 결제 경로)
  *   ai-image : POST 메뉴 사진 배경 제거    → 회원 당 aiImagePerMember (#130)
  *   api      : 그 밖                      → 회원(로그인 전은 IP) 당 defaultPerClient
@@ -40,7 +40,8 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
   private static final List<PathPattern> AUTH_PATHS = List.of(
       PARSER.parse("/api/v*/auth/login"),
       PARSER.parse("/api/v*/auth/signup/**"),
-      PARSER.parse("/api/v*/auth/password/**"));   // 비밀번호 찾기·재설정 (#162): 메일 낭비·코드 대입 방지
+      PARSER.parse("/api/v*/auth/password/**"),    // 비밀번호 찾기·재설정 (#162): 메일 낭비·코드 대입 방지
+      PARSER.parse("/api/v*/auth/phone/**"));      // 가입 전 휴대폰 인증 (#164): 로그인 없이 문자 발송 → 문자 폭탄·비용 방지
   private static final List<PathPattern> PAYMENT_PATHS = List.of(
       PARSER.parse("/api/v*/orders"),                       // 주문 생성 = 결제 요청 생성 (v10)
       PARSER.parse("/api/v*/orders/*/payment/confirm"));    // 결제 확인 (v10)
