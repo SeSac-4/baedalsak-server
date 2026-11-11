@@ -72,6 +72,7 @@ class RoleMatrixTest {
       GET    | /api/v1/members/me                       | C O R
       GET    | /api/v1/categories                       | C O R
       GET    | /api/v1/stores                           | C O R
+      GET    | /api/v1/stores/summary                   | C O R
       GET    | /api/v1/stores/3                         | C O R
       GET    | /api/v1/stores/3/menus                   | C O R
       GET    | /api/v1/stores/me                        | O

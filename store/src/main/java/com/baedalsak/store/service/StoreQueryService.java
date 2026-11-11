@@ -9,6 +9,7 @@ import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.response.CategoryResponse;
 import com.baedalsak.store.dto.response.CursorResponse;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
+import com.baedalsak.store.dto.response.StoreListSummaryResponse;
 import com.baedalsak.store.dto.response.StoreSummaryResponse;
 import com.baedalsak.store.error.StoreErrorCode;
 import com.baedalsak.store.repository.BusinessHourRepository;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -74,6 +76,27 @@ public class StoreQueryService {
             return CursorResponse.last(content);
         }
         return CursorResponse.next(content, String.valueOf(stores.getLast().getId()));
+    }
+
+    // 가게 목록 통계 (#169). 카테고리별 집계 1번 + 영업 중 수 1번, 가게 수와 무관하게 쿼리 2개
+    public StoreListSummaryResponse getStoreListSummary() {
+        Map<Category, Long> categoryCounts = new EnumMap<>(Category.class);
+        for (Category category : Category.values()) {
+            categoryCounts.put(category, 0L);
+        }
+        long totalCount = 0;
+        Integer minDeliveryFee = null;
+        for (Object[] row : storeRepository.countAndMinDeliveryFeeByCategory()) {
+            long count = (Long) row[1];
+            int fee = (Integer) row[2];
+            categoryCounts.put((Category) row[0], count);
+            totalCount += count;
+            minDeliveryFee = minDeliveryFee == null ? fee : Math.min(minDeliveryFee, fee);
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        long openCount = storeRepository.countOpenAt(BusinessHour.toDbValue(now.getDayOfWeek()), now.toLocalTime());
+        return new StoreListSummaryResponse(totalCount, openCount, minDeliveryFee, categoryCounts);
     }
 
     public StoreDetailResponse getStore(Long storeId) {
