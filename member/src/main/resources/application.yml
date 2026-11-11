@@ -113,3 +113,10 @@ cognito:
   region: ${AWS_REGION:ap-northeast-2}
   user-pool-id: ${COGNITO_USER_POOL_ID}
   client-id: ${COGNITO_CLIENT_ID}
+
+# 휴대폰 인증 문자 (#164)
+#   sns: AWS SNS 로 실제 발송 (기본값 — AWS 는 따로 설정할 것 없음)
+#   log: 로컬 개발용, 문자 대신 로그에 코드 출력 → .env 에 SMS_SENDER=log
+sms:
+  sender: ${SMS_SENDER:sns}
+  region: ${AWS_REGION:ap-northeast-2}

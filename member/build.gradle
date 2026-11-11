@@ -13,6 +13,8 @@ dependencies {
     //   로컬: ~/.aws 의 내 IAM 키 / AWS: Pod Identity (기본 자격 증명 체인이 알아서 찾음)
     implementation platform('software.amazon.awssdk:bom:2.57.3')
     implementation 'software.amazon.awssdk:cognitoidentityprovider'
+    implementation 'software.amazon.awssdk:cognitoidentityprovider'
+    implementation 'software.amazon.awssdk:sns'      // 휴대폰 인증 문자 (#164). 버전은 위 bom 이 맞춤
     
     //공통 모듈 사용
     implementation project(':common')
