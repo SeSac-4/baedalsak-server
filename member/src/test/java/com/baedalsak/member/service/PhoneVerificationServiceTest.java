@@ -46,7 +46,7 @@ class PhoneVerificationServiceTest {
   }
 
   private PhoneVerificationService service(boolean required) {
-    return new PhoneVerificationService(store, smsSender, memberRepository, new SmsProperties(required));
+    return new PhoneVerificationService(store, smsSender, memberRepository, new SmsProperties(required, true));
   }
 
   private PhoneVerificationService service() {
