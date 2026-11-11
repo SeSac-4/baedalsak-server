@@ -7,5 +7,8 @@ dependencies {
     // gateway(WebFlux)에 서블릿 웹이 딸려 들어가는 걸 막는다.
     compileOnly 'org.springframework.boot:spring-boot-starter-webmvc'
     // ConstraintViolationException(@PathVariable·@RequestParam 검증) 처리용. webmvc 서비스는 모두 validation 을 이미 씀
+        // 리스너 실패 처리기(messaging 패키지)용. 실제 라이브러리는 RabbitMQ 를 쓰는 서비스(member·order·payment·delivery)가 제공 (#186)
+    compileOnly 'org.springframework.boot:spring-boot-starter-amqp'
     compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    
 }
