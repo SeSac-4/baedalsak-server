@@ -5,6 +5,7 @@ import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.store.domain.Category;
 import com.baedalsak.store.dto.response.CursorResponse;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
+import com.baedalsak.store.dto.response.StoreListSummaryResponse;
 import com.baedalsak.store.dto.response.StoreSummaryResponse;
 import com.baedalsak.store.service.StoreQueryService;
 import jakarta.validation.constraints.Max;
@@ -33,6 +34,13 @@ public class StoreQueryController {
                                                           @RequestParam(required = false) @Min(1) Long cursor,
                                                           @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return storeQueryService.getStores(category, cursor, size);
+    }
+
+    // 가게 목록 통계 (#169): 홈 배너(영업 중 수 · 최저 배달비), PC 카테고리 타일(가게 수)
+    //   /{storeId} 보다 먼저 매칭된다 (경로 리터럴 우선)
+    @GetMapping("/summary")
+    public StoreListSummaryResponse getStoreListSummary() {
+        return storeQueryService.getStoreListSummary();
     }
 
     // 8.3.1 내 가게 조회. /{storeId} 보다 먼저 매칭된다 (경로 리터럴 우선)
