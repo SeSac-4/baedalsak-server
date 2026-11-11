@@ -84,6 +84,10 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
+        // 테스트 JVM 시간대를 운영 컨테이너(Dockerfile TZ=Asia/Seoul)와 맞춘다.
+        // hibernate.jdbc.time_zone(Asia/Seoul)과 JVM 시간대가 다르면 LocalTime 저장 · 쿼리 파라미터가 시차만큼 밀린다
+        // (GitHub Actions 러너는 UTC → 영업 중 가게 수 쿼리가 0 으로 나옴)
+        systemProperty 'user.timezone', 'Asia/Seoul'
     }
 }
 
