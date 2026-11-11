@@ -57,6 +57,7 @@ class SignupServiceTest {
   @Mock RiderProfileRepository riderProfileRepository;
   @Mock CognitoAuthClient cognitoAuthClient;
   @Mock AuthService authService;
+  @Mock PhoneVerificationService phoneVerificationService;   // 기본: 표 없음 → false (미인증 가입)
 
   private final FakeTransactionManager tx = new FakeTransactionManager();
   private SignupService signupService;
@@ -64,11 +65,15 @@ class SignupServiceTest {
   @BeforeEach
   void setUp() {
     signupService = new SignupService(memberRepository, ownerProfileRepository, riderProfileRepository,
-        cognitoAuthClient, new TransactionTemplate(tx), authService);
+        cognitoAuthClient, new TransactionTemplate(tx), authService, phoneVerificationService);
   }
 
   private SignupCustomerRequest customer() {
-    return new SignupCustomerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678");
+    return customer(null);
+  }
+
+  private SignupCustomerRequest customer(String phoneVerificationToken) {
+    return new SignupCustomerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", phoneVerificationToken);
   }
 
   /** DB 가 INSERT 후 id 1000 을 돌려준 것처럼 */
@@ -96,11 +101,51 @@ class SignupServiceTest {
   void 사장님_가입은_가게_이름을_프로필에_저장() {
     memberSavedWithId();
 
-    signupService.signupOwner(new SignupOwnerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", "싹싹분식"));
+    signupService.signupOwner(new SignupOwnerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", "싹싹분식", null));
 
     verify(ownerProfileRepository).saveAndFlush(argThat(profile ->
         profile.getMemberId() == MEMBER_ID && profile.getStoreNameAtSignup().equals("싹싹분식")));
     verify(cognitoAuthClient).createUser(MEMBER_ID, EMAIL, PASSWORD, Role.OWNER);
+  }
+
+  @Test
+  void 휴대폰_인증_표가_맞으면_인증된_회원으로_저장() {
+    when(phoneVerificationService.confirmSignupToken("010-1234-5678", "token-1")).thenReturn(true);
+    memberSavedWithId();
+
+    signupService.signupCustomer(customer("token-1"));
+
+    verify(memberRepository).saveAndFlush(argThat(Member::isPhoneVerified));
+  }
+
+  @Test
+  void 휴대폰_인증을_건너뛰면_미인증으로_저장() {
+    memberSavedWithId();
+
+    signupService.signupCustomer(customer());
+
+    verify(memberRepository).saveAndFlush(argThat(saved -> !saved.isPhoneVerified()));
+  }
+
+  @Test
+  void 휴대폰_인증_표가_틀리면_400_저장도_Cognito_도_안함() {
+    when(phoneVerificationService.confirmSignupToken("010-1234-5678", "bad"))
+        .thenThrow(new BusinessException(CommonErrorCode.VALIDATION_FAILED));
+
+    assertThatThrownBy(() -> signupService.signupCustomer(customer("bad")))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorCode").isEqualTo(CommonErrorCode.VALIDATION_FAILED);
+    verify(memberRepository, never()).saveAndFlush(any());
+    verify(cognitoAuthClient, never()).createUser(anyLong(), anyString(), anyString(), any());
+  }
+
+  @Test
+  void 이미_가입된_이메일이면_표를_쓰지_않고_409() {
+    when(memberRepository.existsByEmail(EMAIL)).thenReturn(true);
+
+    assertThatThrownBy(() -> signupService.signupCustomer(customer("token-1")))
+        .isInstanceOf(BusinessException.class);
+    verify(phoneVerificationService, never()).confirmSignupToken(anyString(), anyString());   // 표가 살아 있어 다시 쓸 수 있음
   }
 
   @Test
