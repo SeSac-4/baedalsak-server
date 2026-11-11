@@ -5,6 +5,7 @@ import java.util.List;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -99,6 +100,15 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
     return build(CommonErrorCode.METHOD_NOT_ALLOWED, null);
+  }
+
+  //Content-Type 이 JSON 이 아님 (예: text/plain 으로 보냄). 없으면 아래 Exception 처리기가 500으로 바꿔 버림
+  //설계서 에러 코드 표에 415 가 없어 400(요청 형식 오류)으로 (#186)
+  @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+  public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+    log.warn("지원하지 않는 Content-Type contentType={}", e.getContentType());
+    return build(CommonErrorCode.VALIDATION_FAILED,
+        List.of(new FieldErrorDetail("Content-Type", "application/json 으로 보내 주세요.")));
   }
 
   /** 존재하지 않는 경로 */
