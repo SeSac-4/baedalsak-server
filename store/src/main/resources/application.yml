@@ -62,6 +62,13 @@ spring:
           multiplier: 2
           max-interval: 10s
 
+# [내부] 동기 호출 (설계서 '동기 호출' 탭). 주소는 환경 변수로만 받는다 (docs 3번, 하드코딩 금지)
+internal-api:
+  order-url: ${ORDER_SERVICE_URL:http://localhost:8082}    # 로컬 VSCode 실행 시 order 포트. 가게 폐업 전 진행 중 주문 확인 (#176)
+  # 응답이 없으면 무한정 기다리지 않고 503 DEPENDENCY_UNAVAILABLE 로 끊는다
+  connect-timeout: 1s
+  read-timeout: 2s
+
 # 가게·메뉴 사진 (#110). 프론트가 업로드 URL 로 S3 에 직접 올리고, DB 에는 키(stores/{id}/…)만 저장
 #   AWS: 인프라가 IMAGE_BUCKET·IMAGE_BASE_URL 주입 / 자격 증명은 SDK 기본 체인 (로컬 ~/.aws, AWS Pod Identity)
 image:

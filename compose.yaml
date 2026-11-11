@@ -175,7 +175,12 @@ services:
     image: baedalsak/store:local
     ports: ["8081:8080"]
     environment:
-      { <<: *app-env, DB_NAME: store, DB_USER: store_svc, DB_SCHEMA: store }
+      <<: *app-env
+      DB_NAME: store
+      DB_USER: store_svc
+      DB_SCHEMA: store
+      # [내부] 동기 호출 — 가게 폐업 전 진행 중 주문 확인 (#176)
+      ORDER_SERVICE_URL: http://order:8080
 
   # 주문·장바구니
   order:

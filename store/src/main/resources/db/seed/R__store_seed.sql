@@ -12,7 +12,8 @@
 -- =============================================================================
 
 -- 가게 120개. 바로 주문해 볼 수 있게 OPEN 으로 넣는다
---   ON CONFLICT (owner_id) DO NOTHING: 이미 그 사장님 가게가 있으면 건너뜀
+--   ON CONFLICT (owner_id) WHERE deleted_at IS NULL DO NOTHING: 이미 그 사장님의 운영 중 가게가 있으면 건너뜀
+--   (owner_id 는 폐업하지 않은 가게끼리만 UNIQUE — store_owner_active_uq 부분 인덱스, #176)
 INSERT INTO store (owner_id, name, category, address, min_order_amount, delivery_fee, operation_status)
 SELECT v.owner_id, v.name, v.category, v.address, v.min_order_amount, v.delivery_fee, 'OPEN'
 FROM (VALUES
@@ -137,7 +138,7 @@ FROM (VALUES
     (417, '카페모카', 'CAFE_DESSERT', '서울특별시 관악구 신림로 113', 10000, 2000),
     (418, '허니브레드', 'CAFE_DESSERT', '서울특별시 성동구 뚝섬로 257', 13000, 3500)
 ) AS v (owner_id, name, category, address, min_order_amount, delivery_fee)
-ON CONFLICT (owner_id) DO NOTHING;
+ON CONFLICT (owner_id) WHERE deleted_at IS NULL DO NOTHING;
 
 -- 요일별 영업시간 (0=일 … 6=토, 매일 영업). 카테고리마다 시간대를 다르게 둔다
 --   자정을 넘는 영업은 지원하지 않으므로(오픈 이상 · 마감 미만) 마감은 23:59 까지
@@ -163,7 +164,8 @@ SELECT s.id,
        false
 FROM store s
 CROSS JOIN generate_series(0, 6) AS d (day_of_week)
-WHERE s.owner_id IN (101, 102) OR s.owner_id BETWEEN 301 AND 418
+WHERE (s.owner_id IN (101, 102) OR s.owner_id BETWEEN 301 AND 418)
+  AND s.deleted_at IS NULL
 ON CONFLICT (store_id, day_of_week) DO NOTHING;
 
 -- 메뉴: 가게마다 6개 (이름에 맞는 대표 메뉴 1개 + 카테고리 메뉴 5개). 일부는 품절(SOLD_OUT)
@@ -892,7 +894,7 @@ FROM (VALUES
     (418, '딸기 스무디', '생딸기 스무디', 6000, 'ON_SALE'),
     (418, '아이스티', '복숭아 아이스티', 4000, 'ON_SALE')
 ) AS v (owner_id, name, description, price, sale_status)
-JOIN store s ON s.owner_id = v.owner_id
+JOIN store s ON s.owner_id = v.owner_id AND s.deleted_at IS NULL
 WHERE NOT EXISTS (
     SELECT 1 FROM menu m
     WHERE m.store_id = s.id AND m.name = v.name AND m.deleted_at IS NULL
