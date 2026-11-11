@@ -33,7 +33,11 @@ public record SignupRiderRequest(
     
     // MOTORCYCLE · BICYCLE · WALK. 다른 값이면 JSON 변환 단계에서 400
     @NotNull(message = "운송수단은 필수 입력 항목입니다.")
-    VehicleType vehicleType
+    VehicleType vehicleType,
+
+    // 휴대폰 인증 완료 표 (#164, POST /auth/phone/verify 응답). 선택 — 없으면 미인증으로 가입
+    @Size(max = 100)
+    String phoneVerificationToken
 
 ) implements SignupRequest {
 
@@ -41,6 +45,7 @@ public record SignupRiderRequest(
   @Override
   public String toString() {
     return "SignupRiderRequest[email=" + email + ", password=****, name=" + name
-        + ", phone=" + MaskingUtils.maskPhone(phone) + ", vehicleType= " + vehicleType + "]";
+        + ", phone=" + MaskingUtils.maskPhone(phone) + ", vehicleType= " + vehicleType
+        + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****") + "]";
   }
 }

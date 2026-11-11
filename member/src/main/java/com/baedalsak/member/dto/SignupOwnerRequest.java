@@ -32,7 +32,11 @@ public record SignupOwnerRequest(
     // owner_profile.store_name_at_signup 에 저장. 가게 등록(store)은 가입 후 따로
     @NotBlank(message = "가게 이름은 필수 입력 항목입니다.")
     @Size(max = 100)
-    String storeName
+    String storeName,
+
+    // 휴대폰 인증 완료 표 (#164, POST /auth/phone/verify 응답). 선택 — 없으면 미인증으로 가입
+    @Size(max = 100)
+    String phoneVerificationToken
 
 ) implements SignupRequest {
 
@@ -40,6 +44,7 @@ public record SignupOwnerRequest(
   @Override
   public String toString() {
     return "SignupOwnerRequest[email=" + email + ", password=****, name=" + name
-        + ", phone=" + MaskingUtils.maskPhone(phone) + ", storeNme=" + storeName + "]";
+        + ", phone=" + MaskingUtils.maskPhone(phone) + ", storeNme=" + storeName
+        + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****") + "]";
   }
 }

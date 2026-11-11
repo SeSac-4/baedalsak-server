@@ -17,19 +17,20 @@ public record MemberMeResponse(
     String name,
     String phone,
     Role role,
+    boolean phoneVerified,      // 휴대폰 인증 여부 (#164) — 배달 알림 문자를 받을 수 있는지
     String storeNameAtSignup,   // 사장님만
     String vehicleType          // 라이더만
 ) {
 
   public static MemberMeResponse of(Member member, String storeNameAtSignup, String vehicleType) {
     return new MemberMeResponse(member.getId(), member.getEmail(), member.getName(), member.getPhone(),
-        member.getRole(), storeNameAtSignup, vehicleType);
+        member.getRole(), member.isPhoneVerified(), storeNameAtSignup, vehicleType);
   }
 
   @Override
   public String toString() {
     return "MemberMeResponse[id=" + id + ", email=" + email + ", name=" + name
-        + ", phone=" + MaskingUtils.maskPhone(phone) + ", role=" + role
+        + ", phone=" + MaskingUtils.maskPhone(phone) + ", role=" + role + ", phoneVerified=" + phoneVerified
         + ", storeNameAtSignup=" + storeNameAtSignup + ", vehicleType=" + vehicleType + "]";
   }
 }

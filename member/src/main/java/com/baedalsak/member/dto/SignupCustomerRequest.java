@@ -27,7 +27,11 @@ public record SignupCustomerRequest(
 
     @NotBlank(message = "휴대폰 번호는 필수 입력 항목입니다.")
     @Pattern(regexp = "^010-?\\d{4}-?\\d{4}$", message = "휴대폰 번호 형식이 올바르지 않습니다.")
-    String phone
+    String phone,
+
+    // 휴대폰 인증 완료 표 (#164, POST /auth/phone/verify 응답). 선택 — 없으면 미인증으로 가입
+    @Size(max = 100)
+    String phoneVerificationToken
 
 ) implements SignupRequest {
 
@@ -35,6 +39,7 @@ public record SignupCustomerRequest(
   @Override
   public String toString() {
     return "SignupCustomerRequest[email=" + email + ", password=****, name=" + name
-        + ", phone=" + MaskingUtils.maskPhone(phone) + "]";
+        + ", phone=" + MaskingUtils.maskPhone(phone)
+        + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****") + "]";
   }
 }

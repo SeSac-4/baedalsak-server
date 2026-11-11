@@ -38,6 +38,9 @@ public class Member {
   @Column(nullable = false, length = 10)
   private Role role;
 
+  @Column(name = "phone_verified_at")
+  private OffsetDateTime phoneVerifiedAt;   // null = 번호 인증 안 함 (#164)
+
   @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
   private OffsetDateTime createdAt;
 
@@ -53,4 +56,13 @@ public class Member {
         this.updatedAt = OffsetDateTime.now();
     }
 
+      /** 휴대폰 인증 성공 (#164) — JPA 가 트랜잭션 끝에 UPDATE (변경 감지) */
+  public void markPhoneVerified() {
+    this.phoneVerifiedAt = OffsetDateTime.now();
+    this.updatedAt = this.phoneVerifiedAt;
+  }
+
+  public boolean isPhoneVerified() {
+    return phoneVerifiedAt != null;
+  }
 }
