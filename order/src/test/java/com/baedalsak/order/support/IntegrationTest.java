@@ -1,5 +1,6 @@
 package com.baedalsak.order.support;
 
+import com.baedalsak.order.mail.MailSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -39,6 +41,10 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.flyway.create-schemas", () -> "true");
     }
+
+    // 테스트는 local 프로필이 아니라 SES 발송기가 뜬다 → 실제 SES 를 부르지 않게 mock (조리 시작 메일 #33)
+    @MockitoBean
+    protected MailSender mailSender;
 
     @Autowired
     protected MockMvc mockMvc;
