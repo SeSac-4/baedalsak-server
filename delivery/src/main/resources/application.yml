@@ -126,11 +126,6 @@ delivery-gps:
   arrival-radius-m: 30              # 배달지까지 이 거리 안이면 도착 플래그
   location-ttl: 30m                 # 위치 키 수명. 완료 시 바로 지우고, 지우지 못해도 이 시간 뒤 사라짐
 
-# 가상 라이더 위치 (delivery-gps.mode=virtual). 처음 보는 라이더를 가게 주변 무작위 지점에 두고, 배달을 마치면 배달지에 남긴다
-rider-position:
-  start-min-radius-m: 300           # 가게에서 최소 거리
-  start-max-radius-m: 1500          # 가게에서 최대 거리
-
 # 카카오 REST API (주소 → 좌표, 길찾기). 실패하면 빈 값 → 가게와 배달지를 직선으로 잇는다
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY:}   # 🔒 기본값 없음. 비어 있으면 호출하지 않음

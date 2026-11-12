@@ -10,7 +10,7 @@ import java.time.Clock;
  * 실시간 위치 기능 설정 등록 (가상 GPS · 카카오 REST).
  */
 @Configuration
-@EnableConfigurationProperties({DeliveryGpsProperties.class, KakaoProperties.class, RiderPositionProperties.class})
+@EnableConfigurationProperties({DeliveryGpsProperties.class, KakaoProperties.class})
 public class LocationConfig {
 
     /**

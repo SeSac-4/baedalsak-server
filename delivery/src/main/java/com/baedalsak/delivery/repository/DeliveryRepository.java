@@ -128,27 +128,4 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
                           @Param("routePath") String routePath,
                           @Param("distanceM") Integer distanceM,
                           @Param("durationS") Integer durationS);
-
-    /**
-     * 라이더 → 가게 경로 저장 (#193). 아직 없을 때만 저장해, 같은 수락이 두 번 처리돼도 처음 값을 유지한다.
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-            UPDATE Delivery d
-               SET d.approachPath = :approachPath,
-                   d.approachDistanceM = :distanceM,
-                   d.approachDurationS = :durationS
-             WHERE d.id = :deliveryId
-               AND d.approachPath IS NULL
-            """)
-    int saveApproachRouteIfAbsent(@Param("deliveryId") Long deliveryId,
-                                  @Param("approachPath") String approachPath,
-                                  @Param("distanceM") Integer distanceM,
-                                  @Param("durationS") Integer durationS);
-
-    /**
-     * @return 좌표가 있는 가장 오래된 배달 (라이더 가상 위치 기준점)
-     */
-    Optional<Delivery> findFirstByStatusAndPickupLatIsNotNullAndPickupLngIsNotNullOrderByCreatedAtAscIdAsc(
-            DeliveryStatus status);
 }
