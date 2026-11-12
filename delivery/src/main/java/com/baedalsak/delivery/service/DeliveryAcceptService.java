@@ -8,11 +8,13 @@ import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
 import com.baedalsak.delivery.location.DeliveryGeocodeService;
+import com.baedalsak.delivery.location.RiderAssignedEvent;
 import com.baedalsak.delivery.payload.DeliveryAssignedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,17 +36,19 @@ public class DeliveryAcceptService {
     private final MemberClient memberClient;
     private final DeliveryGeocodeService deliveryGeocodeService;
     private final JsonMapper jsonMapper;
+    private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
 
     public DeliveryAcceptService(DeliveryRepository deliveryRepository, OutboxRepository outboxRepository,
                                  MemberClient memberClient, DeliveryGeocodeService deliveryGeocodeService,
-                                 JsonMapper jsonMapper,
+                                 JsonMapper jsonMapper, ApplicationEventPublisher eventPublisher,
                                  PlatformTransactionManager transactionManager) {
         this.deliveryRepository = deliveryRepository;
         this.outboxRepository = outboxRepository;
         this.memberClient = memberClient;
         this.deliveryGeocodeService = deliveryGeocodeService;
         this.jsonMapper = jsonMapper;
+        this.eventPublisher = eventPublisher;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -95,6 +99,8 @@ public class DeliveryAcceptService {
 
         log.info("delivery assigned: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
+        // 커밋 후 라이더 현재 위치 → 가게 경로 저장 (RiderAssignedListener)
+        eventPublisher.publishEvent(new RiderAssignedEvent(delivery.getId()));
         return RiderDeliveryResponse.withoutCustomerPhone(delivery);
     }
 }

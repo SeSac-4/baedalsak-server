@@ -51,8 +51,9 @@ public class DeliveryCompleteService {
 
         log.info("delivery completed: deliveryId={}, orderId={}, riderId={}",
                 delivery.getId(), delivery.getOrderId(), riderId);
-        // 커밋 후 Redis 위치 · 가상 GPS 정리 (DeliveryFinishedListener)
-        eventPublisher.publishEvent(new DeliveryFinishedEvent(delivery.getId()));
+        // 커밋 후 Redis 위치 · 가상 GPS 정리, 라이더를 배달지에 남김 (DeliveryFinishedListener)
+        eventPublisher.publishEvent(new DeliveryFinishedEvent(delivery.getId(), delivery.getRiderId(),
+                delivery.getDeliveryPoint()));
         return DeliveryStatusResponse.from(delivery);
     }
 

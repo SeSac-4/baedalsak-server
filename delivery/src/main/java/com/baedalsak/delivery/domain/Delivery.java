@@ -95,6 +95,16 @@ public class Delivery {
     @Column(name = "route_duration_s")
     private Integer routeDurationS;
 
+    // 라이더 → 가게 경로 (V7). 배차 수락 후 DeliveryRouteService 가 채운다. JSON [{lat, lng}, ...]
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String approachPath;
+
+    @Column(name = "approach_distance_m")
+    private Integer approachDistanceM;
+
+    @Column(name = "approach_duration_s")
+    private Integer approachDurationS;
+
     private Long riderId;
 
     @Column(length = 50)

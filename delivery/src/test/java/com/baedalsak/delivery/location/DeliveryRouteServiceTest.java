@@ -28,17 +28,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 픽업 후 경로 저장: 길찾기 결과 저장, 실패 시 직선 대체, 좌표 없으면 건너뜀, 저장된 경로 읽기
+ * 경로 저장: 픽업 후 가게 → 배달지, 수락 후 라이더 → 가게. 길찾기 결과 저장, 실패 시 직선 대체,
+ * 좌표 · 라이더 위치 없으면 건너뜀, 저장된 경로 읽기
  */
 class DeliveryRouteServiceTest {
 
     private static final GeoPoint STORE = new GeoPoint(37.5446, 127.0559);
     private static final GeoPoint MIDDLE = new GeoPoint(37.5430, 127.0562);
     private static final GeoPoint HOME = new GeoPoint(37.5410, 127.0565);
+    private static final GeoPoint RIDER = new GeoPoint(37.5500, 127.0500);
 
     private final DeliveryRepository repository = mock(DeliveryRepository.class);
     private final DeliveryGeocodeService geocodeService = mock(DeliveryGeocodeService.class);
     private final KakaoDirectionsClient directions = mock(KakaoDirectionsClient.class);
+    private final RiderPositionProvider positionProvider = mock(RiderPositionProvider.class);
     private final PlatformTransactionManager tx = mock(PlatformTransactionManager.class);
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private DeliveryRouteService service;
@@ -48,7 +51,7 @@ class DeliveryRouteServiceTest {
         when(tx.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         DeliveryGpsProperties gps = new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL,
                 Duration.ofSeconds(2), 18, 30, Duration.ofMinutes(30));
-        service = new DeliveryRouteService(repository, geocodeService, directions, gps, jsonMapper, tx);
+        service = new DeliveryRouteService(repository, geocodeService, directions, gps, positionProvider, jsonMapper, tx);
     }
 
     @Test
@@ -125,6 +128,76 @@ class DeliveryRouteServiceTest {
     void readReturnsEmptyForMissingOrBrokenRoute() {
         assertThat(service.readRoute(delivery(STORE, HOME, null))).isEmpty();
         assertThat(service.readRoute(delivery(STORE, HOME, "[{\"lat\":1}]"))).isEmpty();
+    }
+
+    @Test
+    void savesApproachRouteFromRiderPositionToStore() {
+        Delivery assigned = delivery(STORE, HOME, null);
+        ReflectionTestUtils.setField(assigned, "riderId", 9L);
+        when(repository.findById(1L)).thenReturn(Optional.of(assigned));
+        when(positionProvider.currentPosition(9L, STORE)).thenReturn(Optional.of(RIDER));
+        when(directions.findRoute(RIDER, STORE)).thenReturn(Optional.of(new Route(List.of(RIDER, STORE), 700, 120, false)));
+
+        service.saveApproachRoute(1L);
+
+        verify(repository).saveApproachRouteIfAbsent(eq(1L),
+                eq("[{\"lat\":37.55,\"lng\":127.05},{\"lat\":37.5446,\"lng\":127.0559}]"), eq(700), eq(120));
+        verify(repository, never()).saveRouteIfAbsent(anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void approachRouteFallsBackToStraightLineWhenDirectionsFail() {
+        Delivery assigned = delivery(STORE, HOME, null);
+        ReflectionTestUtils.setField(assigned, "riderId", 9L);
+        when(repository.findById(1L)).thenReturn(Optional.of(assigned));
+        when(positionProvider.currentPosition(9L, STORE)).thenReturn(Optional.of(RIDER));
+        when(directions.findRoute(RIDER, STORE)).thenReturn(Optional.empty());
+
+        service.saveApproachRoute(1L);
+
+        int distance = (int) Math.round(RouteGeometry.distanceM(RIDER, STORE));
+        verify(repository).saveApproachRouteIfAbsent(eq(1L), anyString(), eq(distance),
+                eq((int) Math.round(distance / 5.0)));
+    }
+
+    @Test
+    void skipsApproachRouteWhenRiderPositionUnknown() {
+        Delivery assigned = delivery(STORE, HOME, null);
+        ReflectionTestUtils.setField(assigned, "riderId", 9L);
+        when(repository.findById(1L)).thenReturn(Optional.of(assigned));
+        when(positionProvider.currentPosition(9L, STORE)).thenReturn(Optional.empty());
+
+        service.saveApproachRoute(1L);
+
+        verify(directions, never()).findRoute(any(), any());
+        verify(repository, never()).saveApproachRouteIfAbsent(anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void skipsApproachRouteWhenAlreadySaved() {
+        Delivery assigned = delivery(STORE, HOME, null);
+        ReflectionTestUtils.setField(assigned, "riderId", 9L);
+        ReflectionTestUtils.setField(assigned, "approachPath", "[]");
+        when(repository.findById(1L)).thenReturn(Optional.of(assigned));
+
+        service.saveApproachRoute(1L);
+
+        verify(positionProvider, never()).currentPosition(anyLong(), any());
+    }
+
+    @Test
+    void readsSavedApproachRoute() {
+        Delivery saved = delivery(STORE, HOME, null);
+        ReflectionTestUtils.setField(saved, "approachPath",
+                "[{\"lat\":37.55,\"lng\":127.05},{\"lat\":37.5446,\"lng\":127.0559}]");
+        ReflectionTestUtils.setField(saved, "approachDistanceM", 700);
+        ReflectionTestUtils.setField(saved, "approachDurationS", 120);
+
+        Route route = service.readApproachRoute(saved).orElseThrow();
+
+        assertThat(route.path()).containsExactly(RIDER, STORE);
+        assertThat(route.distanceM()).isEqualTo(700);
+        assertThat(service.readRoute(saved)).isEmpty();
     }
 
     private static Delivery delivery(GeoPoint pickup, GeoPoint destination, String routePath) {

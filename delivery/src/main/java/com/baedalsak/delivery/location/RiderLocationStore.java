@@ -20,6 +20,8 @@ import java.util.stream.Collectors;
  *   <li>{@code delivery:location:{id}} — 라이더 위치 JSON (RiderLocation). 쓸 때마다 TTL 갱신</li>
  *   <li>{@code delivery:sim:{id}} — 가상 GPS 시작 시각(epoch ms). 파드가 다시 떠도 경과 시간으로 이어서 움직인다</li>
  *   <li>{@code delivery:sim:active} — 가상 GPS 가 돌고 있는 배달 ID 집합</li>
+ *   <li>{@code delivery:rider-position:{riderId}} — 라이더 현재 위치 JSON (GeoPoint). 배달과 무관해 TTL 없음 —
+ *       배달을 마친 자리에 계속 남는다. 지워지면 다음 조회 때 새 가상 위치를 만든다</li>
  * </ul>
  * Redis 장애가 배달 API 로 번지지 않도록 모든 메서드는 예외를 던지지 않는다 (실패 시 빈 값 · false).
  * 접속이 안 되면 경고를 한 번만 남기고 {@link #RETRY_AFTER} 동안 Redis 를 부르지 않는다
@@ -54,6 +56,10 @@ public class RiderLocationStore {
 
     static String simulationKey(Long deliveryId) {
         return "delivery:sim:" + deliveryId;
+    }
+
+    static String riderPositionKey(Long riderId) {
+        return "delivery:rider-position:" + riderId;
     }
 
     /**
@@ -152,10 +158,54 @@ public class RiderLocationStore {
     }
 
     /**
+     * @param riderId 라이더 ID
+     * @return 라이더 현재 위치 (배달과 무관). 없거나 Redis 실패면 빈 값
+     */
+    public Optional<GeoPoint> findRiderPosition(Long riderId) {
+        return call("rider position read", riderId, () -> {
+            String json = redis.opsForValue().get(riderPositionKey(riderId));
+            return json == null ? Optional.<GeoPoint>empty()
+                    : Optional.of(jsonMapper.readValue(json, GeoPoint.class));
+        }, Optional.empty());
+    }
+
+    /**
+     * 라이더 위치가 없을 때만 저장한다 (SET NX). 동시에 저장하려 해도 먼저 저장된 값 하나만 남는다.
+     *
+     * @param riderId 라이더 ID
+     * @param point   저장할 위치
+     * @return 저장 후 남아 있는 위치 (이미 있었으면 그 값). Redis 실패면 빈 값
+     */
+    public Optional<GeoPoint> saveRiderPositionIfAbsent(Long riderId, GeoPoint point) {
+        return call("rider position create", riderId, () -> {
+            String key = riderPositionKey(riderId);
+            if (Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, jsonMapper.writeValueAsString(point)))) {
+                return Optional.of(point);
+            }
+            String json = redis.opsForValue().get(key);
+            return json == null ? Optional.<GeoPoint>empty()
+                    : Optional.of(jsonMapper.readValue(json, GeoPoint.class));
+        }, Optional.empty());
+    }
+
+    /**
+     * 라이더 위치를 덮어쓴다 (배달을 마친 자리 등).
+     *
+     * @param riderId 라이더 ID
+     * @param point   위치
+     */
+    public void saveRiderPosition(Long riderId, GeoPoint point) {
+        call("rider position save", riderId, () -> {
+            redis.opsForValue().set(riderPositionKey(riderId), jsonMapper.writeValueAsString(point));
+            return null;
+        }, null);
+    }
+
+    /**
      * Redis 호출 공통 처리. 쉬는 중이면 부르지 않고 fallback 을 돌려준다.
      * 접속 실패(DataAccessException)는 처음 한 번만 경고하고 RETRY_AFTER 동안 쉰다. 그 밖의 실패는 그때마다 경고한다.
      */
-    private <T> T call(String action, Long deliveryId, Supplier<T> operation, T fallback) {
+    private <T> T call(String action, Long id, Supplier<T> operation, T fallback) {
         Instant until = unavailableUntil;
         if (until != null && clock.instant().isBefore(until)) {
             return fallback;
@@ -175,7 +225,7 @@ public class RiderLocationStore {
             }
             return fallback;
         } catch (RuntimeException e) {
-            log.warn("{} failed: deliveryId={}, cause={}", action, deliveryId, e.toString());
+            log.warn("{} failed: id={}, cause={}", action, id, e.toString());
             return fallback;
         }
     }
