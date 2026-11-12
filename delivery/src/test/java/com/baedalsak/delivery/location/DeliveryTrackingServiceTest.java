@@ -3,6 +3,7 @@ package com.baedalsak.delivery.location;
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.dto.DeliveryLocationResponse;
+import com.baedalsak.delivery.dto.DeliveryRouteResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
@@ -85,5 +86,38 @@ class DeliveryTrackingServiceTest {
         when(routeService.readRoute(delivery)).thenReturn(Optional.of(new Route(List.of(STORE, HOME), 222, 100, false)));
 
         assertThat(service.getRoute(1042L, TestDeliveries.OWNER_ID).orElseThrow().path()).containsExactly(STORE, HOME);
+    }
+
+    @Test
+    void returnsRiderToStoreRouteWhenAssigned() {
+        GeoPoint rider = new GeoPoint(37.5500, 127.0500);
+        Delivery delivery = delivery(1L, DeliveryStatus.ASSIGNED);
+        when(repository.findByOrderId(1042L)).thenReturn(Optional.of(delivery));
+        when(routeService.readApproachRoute(delivery))
+                .thenReturn(Optional.of(new Route(List.of(rider, STORE), 900, 150, false)));
+
+        DeliveryRouteResponse response = service.getRoute(1042L, TestDeliveries.RIDER_ID).orElseThrow();
+
+        assertThat(response.leg()).isEqualTo(RouteLeg.TO_STORE);
+        assertThat(response.path()).containsExactly(rider, STORE);
+        verify(routeService, never()).readRoute(delivery);
+    }
+
+    @Test
+    void returnsStoreToCustomerRouteWhenPickedUp() {
+        Delivery delivery = delivery(1L, DeliveryStatus.PICKED_UP);
+        when(repository.findByOrderId(1042L)).thenReturn(Optional.of(delivery));
+        when(routeService.readRoute(delivery)).thenReturn(Optional.of(new Route(List.of(STORE, HOME), 222, 100, false)));
+
+        assertThat(service.getRoute(1042L, TestDeliveries.CUSTOMER_ID).orElseThrow().leg())
+                .isEqualTo(RouteLeg.TO_CUSTOMER);
+    }
+
+    @Test
+    void returnsNoRouteBeforeAssignment() {
+        Delivery delivery = delivery(1L, DeliveryStatus.WAITING);
+        when(repository.findByOrderId(1042L)).thenReturn(Optional.of(delivery));
+
+        assertThat(service.getRoute(1042L, TestDeliveries.CUSTOMER_ID)).isEmpty();
     }
 }
