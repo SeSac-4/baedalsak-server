@@ -10,10 +10,8 @@ import com.baedalsak.delivery.dto.PageResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.location.DeliveryTrackingService;
-import com.baedalsak.delivery.location.GeoPoint;
 import com.baedalsak.delivery.location.LocationReportService;
 import com.baedalsak.delivery.location.RiderLocation;
-import com.baedalsak.delivery.location.RiderPositionService;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryActiveService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
@@ -51,7 +49,6 @@ public class DeliveryController {
     private final DeliveryActiveService deliveryActiveService;
     private final DeliveryTrackingService deliveryTrackingService;
     private final LocationReportService locationReportService;
-    private final RiderPositionService riderPositionService;
 
     // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순 (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
     @GetMapping("/waiting")
@@ -96,16 +93,7 @@ public class DeliveryController {
                 .orElse(ResponseEntity.noContent().build());
     }
 
-    // 라이더 본인 현재 위치 (배차 대기 지도). 가상 모드면 처음 볼 때 가게 주변 무작위 지점, 배달을 마치면 배달지. 모르면 204
-    @GetMapping("/me/position")
-    public ResponseEntity<GeoPoint> getMyPosition(@CurrentMember LoginMember rider) {
-        return riderPositionService.getMyPosition(rider.id())
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.noContent().build());
-    }
-
-    // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 · 상태가 바뀔 때 한 번.
-    // 배차 완료면 라이더 → 가게(leg=TO_STORE), 픽업 후면 가게 → 배달지(leg=TO_CUSTOMER). 배차 전 · 경로가 아직 없으면 204
+    // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 시 한 번. 픽업 전이면 204
     @GetMapping("/by-order/{orderId}/route")
     public ResponseEntity<DeliveryRouteResponse> getRoute(@PathVariable Long orderId,
                                                           @CurrentMember LoginMember member) {
