@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,6 +33,19 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     // 라이더의 진행 중 배달 (6.4.2). 같은 delivery_rider_active_uq 사용. UNIQUE 라 0건 또는 1건
     Optional<Delivery> findFirstByRiderIdAndStatusInOrderByAssignedAtAscIdAsc(Long riderId,
                                                                               Collection<DeliveryStatus> statuses);
+
+    // 라이더의 배달 내역. [from, to) 사이에 완료한 배달, 최근 완료 순
+    @Query("""
+            SELECT d FROM Delivery d
+             WHERE d.riderId = :riderId
+               AND d.status = com.baedalsak.delivery.domain.DeliveryStatus.DELIVERED
+               AND d.completedAt >= :from
+               AND d.completedAt < :to
+             ORDER BY d.completedAt DESC, d.id DESC
+            """)
+    List<Delivery> findCompletedByRider(@Param("riderId") Long riderId,
+                                        @Param("from") OffsetDateTime from,
+                                        @Param("to") OffsetDateTime to);
 
     /**
      * 배차 수락 (6.2.2, N2.5). WAITING 일 때만 ASSIGNED 로 바꾸는 조건부 UPDATE. 바뀐 행 수(0 또는 1)를 돌려준다.
