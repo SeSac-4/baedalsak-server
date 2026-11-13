@@ -41,7 +41,7 @@ class RiderLocationStoreTest {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private final MutableClock clock = new MutableClock(NOW);
     private final RiderLocationStore store = new RiderLocationStore(redis, jsonMapper,
-            new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL, Duration.ofSeconds(2), 18, 30, TTL), clock);
+            new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL, Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30, TTL), clock);
 
     @Test
     void savesJsonWithTtlAndReadsItBack() {

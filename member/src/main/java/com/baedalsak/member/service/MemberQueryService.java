@@ -8,6 +8,7 @@ import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.domain.OwnerProfile;
 import com.baedalsak.member.domain.RiderProfile;
+import com.baedalsak.member.domain.Role;
 import com.baedalsak.member.dto.MemberInternalResponse;
 import com.baedalsak.member.dto.MemberMeResponse;
 import com.baedalsak.member.repository.MemberRepository;
@@ -27,8 +28,11 @@ public class MemberQueryService {
   private final RiderProfileRepository riderProfileRepository;   // 추가
 
   // [내부] order·delivery 가 호출. 없으면 404 NOT_FOUND (회원은 세부 코드 없음)
+  // 라이더면 운송수단도 싣는다 (delivery 가 가상 GPS 속도에 쓴다)
   public MemberInternalResponse getInternal(Long memberId) {
-    return MemberInternalResponse.from(findMember(memberId));
+    Member member = findMember(memberId);
+    String vehicleType = member.getRole() == Role.RIDER ? findVehicleType(memberId) : null;
+    return MemberInternalResponse.from(member, vehicleType);
   }
 
   // 내 계정 정보. 역할에 맞는 프로필 값만 채우고 나머지는 null (응답에서 빠짐)
@@ -41,12 +45,16 @@ public class MemberQueryService {
       case OWNER -> storeNameAtSignup = ownerProfileRepository.findById(memberId)
           .map(OwnerProfile::getStoreNameAtSignup)
           .orElse(null);
-      case RIDER -> vehicleType = riderProfileRepository.findById(memberId)
-          .map(RiderProfile::getVehicleType)
-          .orElse(null);
+      case RIDER -> vehicleType = findVehicleType(memberId);
       case CUSTOMER -> { }   // 고객은 프로필 없음
     }
     return MemberMeResponse.of(member, storeNameAtSignup, vehicleType);
+  }
+
+  private String findVehicleType(Long memberId) {
+    return riderProfileRepository.findById(memberId)
+        .map(RiderProfile::getVehicleType)
+        .orElse(null);
   }
 
   private Member findMember(Long memberId) {

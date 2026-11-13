@@ -100,6 +100,11 @@ public class Delivery {
     @Column(length = 50)
     private String riderName;
 
+    // 라이더 운송수단 (V8). 배차 수락 때 채운다. null 이면 오토바이로 본다 (VehicleType.orDefault)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private VehicleType vehicleType;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private DeliveryStatus status;

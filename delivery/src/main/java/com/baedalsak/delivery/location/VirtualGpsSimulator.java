@@ -109,7 +109,7 @@ public class VirtualGpsSimulator {
             return;
         }
         double elapsedS = Math.max(0, Duration.between(startedAt.get(), clock.instant()).toMillis() / 1000.0);
-        double travelledM = elapsedS * properties.speedKmh() * 1000 / 3600;
+        double travelledM = elapsedS * properties.speedKmhOf(delivery.getVehicleType()) * 1000 / 3600;
         GeoPoint point = RouteGeometry.pointAlong(route.get().path(), travelledM);
         locationReportService.report(delivery, route.get(), point, LocationSource.VIRTUAL, travelledM);
     }

@@ -47,7 +47,7 @@ class DeliveryRouteServiceTest {
     void setUp() {
         when(tx.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         DeliveryGpsProperties gps = new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL,
-                Duration.ofSeconds(2), 18, 30, Duration.ofMinutes(30));
+                Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30, Duration.ofMinutes(30));
         service = new DeliveryRouteService(repository, geocodeService, directions, gps, jsonMapper, tx);
     }
 

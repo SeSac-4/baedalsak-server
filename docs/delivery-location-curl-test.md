@@ -35,10 +35,10 @@ docker run -d --rm --name baedalsak-tmp-redis-cache -p 6380:6379 redis:7-alpine 
   redis-server --requirepass "$REDIS_CACHE_PASSWORD" --maxmemory 64mb --maxmemory-policy allkeys-lru
 ```
 
-delivery 를 실행합니다. 이동을 빨리 보려면 속도를 올립니다 (기본 20km/h, 1.2km 에 약 4분).
+delivery 를 실행합니다. 이동을 빨리 보려면 속도를 올립니다 (오토바이 기본 30km/h, 1.2km 에 약 2분 반. 도보 5 · 자전거 15km/h).
 
 ```bash
-SPRING_PROFILES_ACTIVE=local DELIVERY_GPS_SPEED_KMH=120 ./gradlew :delivery:bootRun
+SPRING_PROFILES_ACTIVE=local ./gradlew :delivery:bootRun --args='--delivery-gps.speed-kmh.motorcycle=120'
 ```
 
 헤더 (curl 은 gateway 를 거치지 않으므로 직접 넣는다):

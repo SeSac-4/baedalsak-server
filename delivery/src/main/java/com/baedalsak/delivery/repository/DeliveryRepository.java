@@ -2,6 +2,7 @@ package com.baedalsak.delivery.repository;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.domain.VehicleType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -59,6 +60,7 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
                SET d.status = com.baedalsak.delivery.domain.DeliveryStatus.ASSIGNED,
                    d.riderId = :riderId,
                    d.riderName = :riderName,
+                   d.vehicleType = :vehicleType,
                    d.assignedAt = :assignedAt,
                    d.updatedAt = :assignedAt
              WHERE d.id = :deliveryId
@@ -67,6 +69,7 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     int assignIfWaiting(@Param("deliveryId") Long deliveryId,
                         @Param("riderId") Long riderId,
                         @Param("riderName") String riderName,
+                        @Param("vehicleType") VehicleType vehicleType,
                         @Param("assignedAt") OffsetDateTime assignedAt);
 
     /**

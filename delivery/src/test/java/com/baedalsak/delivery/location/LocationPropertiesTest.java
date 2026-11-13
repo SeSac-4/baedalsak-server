@@ -1,5 +1,6 @@
 package com.baedalsak.delivery.location;
 
+import com.baedalsak.delivery.domain.VehicleType;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -23,10 +24,22 @@ class LocationPropertiesTest {
             DeliveryGpsProperties gps = context.getBean(DeliveryGpsProperties.class);
             assertThat(gps.isVirtual()).isTrue();
             assertThat(gps.updateInterval()).isEqualTo(Duration.ofSeconds(2));
-            assertThat(gps.speedKmh()).isPositive();
+            assertThat(gps.speedKmh().walk()).isPositive();
+            assertThat(gps.speedKmh().bicycle()).isGreaterThan(gps.speedKmh().walk());
+            assertThat(gps.speedKmh().motorcycle()).isGreaterThan(gps.speedKmh().bicycle());
             assertThat(gps.arrivalRadiusM()).isEqualTo(30);
             assertThat(gps.locationTtl()).isPositive();
         });
+    }
+
+    @Test
+    void unknownVehicleUsesMotorcycleSpeed() {
+        DeliveryGpsProperties.SpeedKmh speed = new DeliveryGpsProperties.SpeedKmh(5, 15, 30);
+
+        assertThat(speed.of(VehicleType.WALK)).isEqualTo(5);
+        assertThat(speed.of(VehicleType.BICYCLE)).isEqualTo(15);
+        assertThat(speed.of(null)).isEqualTo(30);
+        assertThat(VehicleType.parse("TRUCK")).isNull();
     }
 
     @Test

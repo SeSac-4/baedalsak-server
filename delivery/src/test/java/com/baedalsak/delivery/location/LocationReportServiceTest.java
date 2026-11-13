@@ -2,11 +2,13 @@ package com.baedalsak.delivery.location;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.domain.VehicleType;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -46,9 +48,9 @@ class LocationReportServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 18km/h = 5m/s, 도착 반경 30m
+        // 도보 3.6km/h = 1m/s, 자전거 9km/h = 2.5m/s, 오토바이 18km/h = 5m/s, 도착 반경 30m
         DeliveryGpsProperties gps = new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL,
-                Duration.ofSeconds(2), 18, 30, Duration.ofMinutes(30));
+                Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30, Duration.ofMinutes(30));
         service = new LocationReportService(repository, routeService, store, gps,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
         when(store.find(anyLong())).thenReturn(Optional.empty());
@@ -66,6 +68,27 @@ class LocationReportServiceTest {
         assertThat(location.arrived()).isFalse();
         assertThat(location.source()).isEqualTo(LocationSource.VIRTUAL);
         verify(store).save(eq(1L), eq(location));
+    }
+
+    @Test
+    void virtualEtaUsesVehicleSpeed() {
+        Delivery delivery = delivery(1L, DeliveryStatus.PICKED_UP);
+        ReflectionTestUtils.setField(delivery, "vehicleType", VehicleType.BICYCLE);
+
+        RiderLocation location = service.report(delivery, ROUTE, STORE, LocationSource.VIRTUAL);
+
+        assertThat(location.etaAt()).isEqualTo(now().plusSeconds(Math.round(location.remainingDistanceM() / 2.5)));
+    }
+
+    @Test
+    void realEtaUsesConfiguredSpeedForWalking() {
+        Delivery delivery = delivery(1L, DeliveryStatus.PICKED_UP);
+        ReflectionTestUtils.setField(delivery, "vehicleType", VehicleType.WALK);
+
+        RiderLocation location = service.report(delivery, ROUTE, STORE, LocationSource.REAL);
+
+        // 길찾기는 자동차 기준이라 도보는 설정 속도(1m/s)로 계산한다
+        assertThat(location.etaAt()).isEqualTo(now().plusSeconds(location.remainingDistanceM()));
     }
 
     @Test
