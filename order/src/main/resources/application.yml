@@ -67,6 +67,10 @@ spring:
           max-interval: 10s
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true      # HTTP 응답 시간 p95 계산용 bucket
   endpoints:
     web:
       exposure:
