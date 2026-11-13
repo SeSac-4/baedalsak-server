@@ -4,6 +4,7 @@ import com.baedalsak.delivery.client.MemberClient;
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.domain.Outbox;
+import com.baedalsak.delivery.domain.VehicleType;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
@@ -20,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 /**
  * 6.2.2 배차 수락. 라이더가 WAITING 배달을 수락해 ASSIGNED 로 배정받는다.
@@ -50,17 +52,20 @@ public class DeliveryAcceptService {
 
     /**
      * member 호출은 트랜잭션 밖에서 먼저 한다 → HTTP 대기 동안 DB 커넥션·행 잠금을 잡고 있지 않는다.
-     * 실패하면 riderName 을 비운 채 배차는 성공시킨다 (설계서 '동기 호출' 탭).
+     * 실패하면 riderName · vehicleType 을 비운 채 배차는 성공시킨다 (설계서 '동기 호출' 탭).
      * 생성 때 좌표를 못 채웠으면 여기서 한 번 더 시도한다 (좌표가 다 있으면 카카오를 호출하지 않음).
      */
     public RiderDeliveryResponse accept(Long deliveryId, Long riderId) {
-        String riderName = memberClient.findName(riderId).orElse(null);
+        Optional<MemberClient.RiderInfo> rider = memberClient.findRider(riderId);
+        String riderName = rider.map(MemberClient.RiderInfo::name).orElse(null);
+        VehicleType vehicleType = rider.map(MemberClient.RiderInfo::vehicleType).orElse(null);
         deliveryGeocodeService.fillMissingCoordinates(deliveryId);
-        return transactionTemplate.execute(status -> assign(deliveryId, riderId, riderName));
+        return transactionTemplate.execute(status -> assign(deliveryId, riderId, riderName, vehicleType));
     }
 
     // 배달 UPDATE 와 outbox INSERT 를 한 트랜잭션에 → 배정됐는데 이벤트가 빠지는 일이 없다 (docs 3-2)
-    private RiderDeliveryResponse assign(Long deliveryId, Long riderId, String riderName) {
+    private RiderDeliveryResponse assign(Long deliveryId, Long riderId, String riderName,
+                                         VehicleType vehicleType) {
         // 라이더는 진행 중 배달을 동시에 1건만 (API 명세 6.2.2 비고). 순차 요청은 여기서 걸린다.
         // 잠금 없는 SELECT 라 동시 요청은 둘 다 통과할 수 있다 → 아래 UPDATE 에서 delivery_rider_active_uq 가 최종 보장
         if (deliveryRepository.existsByRiderIdAndStatusIn(riderId, DeliveryStatus.ACTIVE)) {
@@ -69,7 +74,8 @@ public class DeliveryAcceptService {
 
         int updated;
         try {
-            updated = deliveryRepository.assignIfWaiting(deliveryId, riderId, riderName, OffsetDateTime.now());
+            updated = deliveryRepository.assignIfWaiting(deliveryId, riderId, riderName, vehicleType,
+                    OffsetDateTime.now());
         } catch (DataIntegrityViolationException e) {
             // 같은 라이더의 다른 수락이 먼저 커밋됨. 트랜잭션이 aborted 라 추가 쿼리 없이 바로 던져 롤백한다
             log.info("rider already has active delivery: deliveryId={}, riderId={}", deliveryId, riderId);

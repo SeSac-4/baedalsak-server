@@ -2,6 +2,7 @@ package com.baedalsak.delivery.location;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.domain.VehicleType;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
@@ -102,7 +103,7 @@ public class LocationReportService {
         }
         // 도착 후에는 도착 예정 시각을 도착 시각으로 고정한다 (매번 "지금"으로 바뀌지 않게)
         OffsetDateTime eta = arrived ? arrivedAt
-                : remaining == null ? null : now.plusSeconds(Math.round(remaining / speedMps(route, source)));
+                : remaining == null ? null : now.plusSeconds(Math.round(remaining / speedMps(delivery, route, source)));
 
         RiderLocation location = new RiderLocation(point.lat(), point.lng(), remaining, eta,
                 arrived, arrivedAt, now, source);
@@ -121,7 +122,8 @@ public class LocationReportService {
         if (saved.isPresent() || delivery.getPickupPoint() == null || delivery.getDeliveryPoint() == null) {
             return saved;
         }
-        return Optional.of(Route.straight(delivery.getPickupPoint(), delivery.getDeliveryPoint(), properties.speedKmh()));
+        return Optional.of(Route.straight(delivery.getPickupPoint(), delivery.getDeliveryPoint(),
+                properties.speedKmhOf(delivery.getVehicleType())));
     }
 
     // 가상 GPS: 이동 거리를 알아 정확히 계산. 실제 GPS: 직전 위치에서 GPS 오차만큼 뒤까지만 보고 가장 가까운 지점을 찾는다
@@ -145,10 +147,13 @@ public class LocationReportService {
         return destination != null && RouteGeometry.distanceM(point, destination) <= radius;
     }
 
-    // 가상 GPS 는 설정 속도로 움직이므로 그 속도로, 실제 GPS 는 길찾기 예상 시간(교통 반영) 비율로 계산한다
-    private double speedMps(Route route, LocationSource source) {
-        double configured = properties.speedKmh() * 1000 / 3600;
-        if (source == LocationSource.VIRTUAL || route.straight() || route.durationS() <= 0 || route.distanceM() <= 0) {
+    // 가상 GPS 는 설정 속도로 움직이므로 그 속도로, 실제 GPS 는 길찾기 예상 시간(교통 반영) 비율로 계산한다.
+    // 길찾기는 자동차 경로라 도보 · 자전거는 실제 GPS 여도 수단별 설정 속도로 계산한다
+    private double speedMps(Delivery delivery, Route route, LocationSource source) {
+        VehicleType vehicleType = VehicleType.orDefault(delivery.getVehicleType());
+        double configured = properties.speedKmhOf(vehicleType) * 1000 / 3600;
+        if (source == LocationSource.VIRTUAL || vehicleType != VehicleType.MOTORCYCLE || route.straight()
+                || route.durationS() <= 0 || route.distanceM() <= 0) {
             return configured;
         }
         return (double) route.distanceM() / route.durationS();

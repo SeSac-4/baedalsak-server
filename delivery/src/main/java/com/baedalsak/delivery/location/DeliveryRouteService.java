@@ -68,7 +68,7 @@ public class DeliveryRouteService {
             }
 
             Route route = kakaoDirectionsClient.findRoute(from, to)
-                    .orElseGet(() -> Route.straight(from, to, gpsProperties.speedKmh()));
+                    .orElseGet(() -> Route.straight(from, to, gpsProperties.speedKmhOf(delivery.getVehicleType())));
             String path = jsonMapper.writeValueAsString(route.path());
             transactionTemplate.executeWithoutResult(status -> deliveryRepository.saveRouteIfAbsent(
                     deliveryId, path, route.distanceM(), route.durationS()));

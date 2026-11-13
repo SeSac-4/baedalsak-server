@@ -2,6 +2,7 @@ package com.baedalsak.delivery.location;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
+import com.baedalsak.delivery.domain.VehicleType;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -51,6 +52,19 @@ class VirtualGpsSimulatorTest {
         // 20초 × 5m/s = 100m 이동
         GeoPoint point = reportedPoint(delivery);
         assertThat(RouteGeometry.distanceM(STORE, point)).isCloseTo(100, within(0.5));
+    }
+
+    @Test
+    void walkingMovesSlowerThanMotorcycle() {
+        Delivery delivery = delivery(1L, DeliveryStatus.PICKED_UP);
+        ReflectionTestUtils.setField(delivery, "vehicleType", VehicleType.WALK);
+        givenRunning(delivery, NOW.minusSeconds(20));
+
+        simulator(DeliveryGpsProperties.Mode.VIRTUAL).tick();
+
+        // 20초 × 1m/s = 20m 이동
+        GeoPoint point = reportedPoint(delivery);
+        assertThat(RouteGeometry.distanceM(STORE, point)).isCloseTo(20, within(0.5));
     }
 
     @Test
@@ -129,7 +143,7 @@ class VirtualGpsSimulatorTest {
     }
 
     private VirtualGpsSimulator simulator(DeliveryGpsProperties.Mode mode) {
-        DeliveryGpsProperties gps = new DeliveryGpsProperties(mode, Duration.ofSeconds(2), 18, 30,
+        DeliveryGpsProperties gps = new DeliveryGpsProperties(mode, Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30,
                 Duration.ofMinutes(30));
         return new VirtualGpsSimulator(repository, reportService, store, gps, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
     }

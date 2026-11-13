@@ -122,7 +122,10 @@ delivery-mail:
 delivery-gps:
   mode: ${DELIVERY_GPS_MODE:virtual}
   update-interval: 2s               # 가상 GPS 갱신 · 화면 폴링 주기
-  speed-kmh: 50                     # 가상 GPS 이동 속도 (도심 오토바이 평균)
+  speed-kmh:                        # 운송수단별 이동 속도 (가상 GPS 이동 · 도착 예정 시각). 모르면 오토바이
+    walk: 5
+    bicycle: 15
+    motorcycle: 30                  # 도심 오토바이 평균
   arrival-radius-m: 30              # 배달지까지 이 거리 안이면 도착 플래그
   location-ttl: 30m                 # 위치 키 수명. 완료 시 바로 지우고, 지우지 못해도 이 시간 뒤 사라짐
 
