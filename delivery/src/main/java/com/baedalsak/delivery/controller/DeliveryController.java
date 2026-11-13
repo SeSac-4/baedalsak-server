@@ -7,6 +7,7 @@ import com.baedalsak.delivery.dto.DeliveryRouteResponse;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
 import com.baedalsak.delivery.dto.LocationReportRequest;
 import com.baedalsak.delivery.dto.PageResponse;
+import com.baedalsak.delivery.dto.RiderDeliveryHistoryResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.location.DeliveryTrackingService;
@@ -16,12 +17,14 @@ import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryActiveService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
 import com.baedalsak.delivery.service.DeliveryDetailService;
+import com.baedalsak.delivery.service.DeliveryHistoryService;
 import com.baedalsak.delivery.service.DeliveryPickupService;
 import com.baedalsak.delivery.service.DeliveryWaitingService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +34,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 배달 API. gateway 가 /v1/deliveries 이하를 이 서비스로 보낸다.
@@ -47,6 +53,7 @@ public class DeliveryController {
     private final DeliveryCompleteService deliveryCompleteService;
     private final DeliveryDetailService deliveryDetailService;
     private final DeliveryActiveService deliveryActiveService;
+    private final DeliveryHistoryService deliveryHistoryService;
     private final DeliveryTrackingService deliveryTrackingService;
     private final LocationReportService locationReportService;
 
@@ -91,6 +98,15 @@ public class DeliveryController {
         return deliveryActiveService.getActive(rider.id())
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
+    }
+
+    // 배달 내역 (라이더). from ~ to(포함, 한국 날짜) 사이에 완료한 배달, 최근 완료 순. 합계 · 날짜별 묶기는 프론트에서 한다
+    @GetMapping("/me/history")
+    public List<RiderDeliveryHistoryResponse> getHistory(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @CurrentMember LoginMember rider) {
+        return deliveryHistoryService.getHistory(rider.id(), from, to);
     }
 
     // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 시 한 번. 픽업 전이면 204
