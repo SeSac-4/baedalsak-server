@@ -28,22 +28,13 @@ public class DeliveryTrackingService {
     /**
      * @param orderId  주문 ID
      * @param memberId 요청자
-     * @return 경로. 배차 완료면 라이더 → 가게, 픽업 후면 가게 → 배달지.
-     *         배달이 없거나 배차 전이거나 아직 경로가 없으면 빈 값 → 204
+     * @return 경로. 배달이 없거나 아직 경로가 없으면(픽업 전) 빈 값 → 204
      */
     @Transactional(readOnly = true)
     public Optional<DeliveryRouteResponse> getRoute(Long orderId, Long memberId) {
-        return findAuthorized(orderId, memberId).flatMap(this::currentRoute);
-    }
-
-    private Optional<DeliveryRouteResponse> currentRoute(Delivery delivery) {
-        return switch (delivery.getStatus()) {
-            case WAITING -> Optional.empty();
-            case ASSIGNED -> deliveryRouteService.readApproachRoute(delivery)
-                    .map(route -> DeliveryRouteResponse.of(delivery.getId(), RouteLeg.TO_STORE, route));
-            case PICKED_UP, DELIVERED -> deliveryRouteService.readRoute(delivery)
-                    .map(route -> DeliveryRouteResponse.of(delivery.getId(), RouteLeg.TO_CUSTOMER, route));
-        };
+        return findAuthorized(orderId, memberId)
+                .flatMap(delivery -> deliveryRouteService.readRoute(delivery)
+                        .map(route -> DeliveryRouteResponse.of(delivery.getId(), route)));
     }
 
     /**
