@@ -37,7 +37,11 @@ public record SignupRiderRequest(
 
     // 휴대폰 인증 완료 표 (#164, POST /auth/phone/verify 응답). 선택 — 없으면 미인증으로 가입
     @Size(max = 100)
-    String phoneVerificationToken
+    String phoneVerificationToken,
+
+    // 이메일 인증 완료 표 (#207, POST /auth/email/verify 응답). 필수 — 없으면 400 (부하 테스트 날 스위치를 끄면 없어도 가입)
+    @Size(max = 100)
+    String emailVerificationToken
 
 ) implements SignupRequest {
 
@@ -46,6 +50,7 @@ public record SignupRiderRequest(
   public String toString() {
     return "SignupRiderRequest[email=" + email + ", password=****, name=" + name
         + ", phone=" + MaskingUtils.maskPhone(phone) + ", vehicleType= " + vehicleType
-        + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****") + "]";
+        + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****")
+        + ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****") + "]";
   }
 }

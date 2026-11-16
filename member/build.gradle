@@ -15,6 +15,7 @@ dependencies {
     implementation 'software.amazon.awssdk:cognitoidentityprovider'
     implementation 'software.amazon.awssdk:cognitoidentityprovider'
     implementation 'software.amazon.awssdk:sns'      // 휴대폰 인증 문자 (#164). 버전은 위 bom 이 맞춤
+    implementation 'software.amazon.awssdk:sesv2'    // 가입 전 이메일 인증 메일 (#207)
     
     //공통 모듈 사용
     implementation project(':common')

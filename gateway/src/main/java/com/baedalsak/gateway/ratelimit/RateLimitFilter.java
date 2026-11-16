@@ -41,7 +41,8 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
       PARSER.parse("/api/v*/auth/login"),
       PARSER.parse("/api/v*/auth/signup/**"),
       PARSER.parse("/api/v*/auth/password/**"),    // 비밀번호 찾기·재설정 (#162): 메일 낭비·코드 대입 방지
-      PARSER.parse("/api/v*/auth/phone/**"));      // 가입 전 휴대폰 인증 (#164): 로그인 없이 문자 발송 → 문자 폭탄·비용 방지
+      PARSER.parse("/api/v*/auth/phone/**"),       // 가입 전 휴대폰 인증 (#164): 로그인 없이 문자 발송 → 문자 폭탄·비용 방지
+      PARSER.parse("/api/v*/auth/email/**"));      // 가입 전 이메일 인증 (#207): 로그인 없이 메일 발송 → 메일 폭탄 방지
   private static final List<PathPattern> PAYMENT_PATHS = List.of(
       PARSER.parse("/api/v*/orders"),                       // 주문 생성 = 결제 요청 생성 (v10)
       PARSER.parse("/api/v*/orders/*/payment/confirm"));    // 결제 확인 (v10)
