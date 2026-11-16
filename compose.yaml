@@ -167,6 +167,8 @@ services:
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://host.docker.internal:8000}
       # 토큰 검증용 Cognito 발급자 (#23). AWS 는 인프라 deploy.sh 가 주입
       COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:?.env 파일에 COGNITO_ISSUER_URI 를 추가해 주세요}
+      # 토큰 client_id 검사 (#204)
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?.env 파일에 COGNITO_CLIENT_ID 를 추가해 주세요}
 
   # 메뉴·가게
   store:

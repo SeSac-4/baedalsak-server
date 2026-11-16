@@ -99,6 +99,11 @@ spring:
                 connect-timeout: 1000      # ms. FastAPI 에 연결 못 하면 1초 만에 포기 → 503
                 response-timeout: 20000    # ms. 이 경로만 20초 (CloudFront 30초보다 짧게, 수치 미정)
 
+# 토큰 client_id 검사 (#204): 우리 앱 클라이언트(member)로 발급된 토큰만 통과. 값이 없으면 기동 실패
+#   AWS 는 infra gateway.yaml externalSecretSsm 이 주입 (member 와 같은 SSM 값)
+cognito:
+  client-id: ${COGNITO_CLIENT_ID}
+
 # 요청 제한 (#24, 설계서 v6 API 명세 429). 값은 부하 테스트 후 조정
 rate-limit:
   enabled: true             # false 면 요청 제한 끔 (부하 테스트·시연 때 환경 변수 RATE_LIMIT_ENABLED=false)
