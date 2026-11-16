@@ -10,4 +10,5 @@ public interface SignupRequest {
   String name();
   String phone();
   String phoneVerificationToken();   // 휴대폰 인증 완료 표 (#164). 없으면 미인증 가입 (스위치가 켜지면 필수)
+  String emailVerificationToken();   // 이메일 인증 완료 표 (#207). 필수 (스위치를 끈 부하 테스트 날만 없어도 됨)
 }

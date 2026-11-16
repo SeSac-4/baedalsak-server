@@ -27,9 +27,13 @@ import com.baedalsak.member.dto.PasswordForgotRequest;
 import com.baedalsak.member.dto.PasswordResetRequest;
 import com.baedalsak.member.service.PasswordResetService;
 
+import com.baedalsak.member.dto.EmailCodeRequest;
+import com.baedalsak.member.dto.EmailSignupVerifyRequest;
+import com.baedalsak.member.dto.EmailVerifyResponse;
 import com.baedalsak.member.dto.PhoneCodeRequest;
 import com.baedalsak.member.dto.PhoneSignupVerifyRequest;
 import com.baedalsak.member.dto.PhoneVerifyResponse;
+import com.baedalsak.member.service.EmailVerificationService;
 import com.baedalsak.member.service.PhoneVerificationService;
 
 import jakarta.validation.Valid;
@@ -46,6 +50,7 @@ public class AuthController {
   private final SignupService signupService;
   private final PasswordResetService passwordResetService;
   private final PhoneVerificationService phoneVerificationService;
+  private final EmailVerificationService emailVerificationService;
 
    // 고객 가입 (API 명세 8.1.1) — 201 + 로그인과 같은 쿠키 2개. 가입 즉시 로그인 상태
   @PostMapping("/signup/customer")
@@ -109,6 +114,20 @@ public class AuthController {
   public ResponseEntity<Void> resetPassword(@Valid @RequestBody PasswordResetRequest req) {
     passwordResetService.reset(req);
     return ResponseEntity.noContent().build();
+  }
+
+  // 가입 화면 이메일 인증번호 받기 (#207) — 202. 이미 가입된 이메일 409 · 60초 간격 · 하루 5통 넘으면 429
+  @PostMapping("/email/code")
+  public ResponseEntity<Void> sendSignupEmailCode(@Valid @RequestBody EmailCodeRequest req) {
+    emailVerificationService.sendSignupCode(req.email());
+    return ResponseEntity.accepted().build();
+  }
+
+  // 가입 화면 이메일 인증번호 확인 (#207) — 200 + 인증 완료 표 (10분, 가입 요청에 1번 사용)
+  @PostMapping("/email/verify")
+  public ResponseEntity<EmailVerifyResponse> verifySignupEmail(@Valid @RequestBody EmailSignupVerifyRequest req) {
+    String token = emailVerificationService.verifySignupCode(req.email(), req.code());
+    return ResponseEntity.ok(new EmailVerifyResponse(token));
   }
 
   // 가입 화면 휴대폰 인증번호 받기 (#164) — 202. 60초 간격 · 번호당 하루 5통 넘으면 429 (gateway IP 제한도 걸림)

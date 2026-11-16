@@ -124,3 +124,14 @@ sms:
   verification-required: ${PHONE_VERIFICATION_REQUIRED:false}  
   # 주문·배달 알림 문자 (#182). 휴대폰 인증한 고객에게만 감. 월 한도 1달러라 필요하면 false 로 끔
   notification-enabled: ${SMS_NOTIFICATION_ENABLED:true}
+
+# 가입 전 이메일 인증 메일 (#207)
+#   ses: AWS SES 로 실제 발송 (기본값 — 권한은 infra #61, 샌드박스라 등록한 주소로만 감)
+#   log: 로컬 개발용, 메일 대신 로그에 코드 출력 → .env 에 EMAIL_SENDER=log
+email:
+  sender: ${EMAIL_SENDER:ses}
+  region: ${AWS_REGION:ap-northeast-2}
+  from: no-reply@baedalsak.click     # 팀 공통 발신 주소 (order · payment · delivery 와 같은 값)
+  # 가입 때 이메일 인증 필수 여부. 기본 true = 필수 (주문·결제·배달 알림이 메일로 가서 주소가 맞아야 함)
+  #   false = 건너뛰기 허용 → 부하 테스트 날만 Helm extraEnv EMAIL_VERIFICATION_REQUIRED=false
+  verification-required: ${EMAIL_VERIFICATION_REQUIRED:true}

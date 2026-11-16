@@ -44,6 +44,7 @@ public class SignupService {
   private final TransactionTemplate transactionTemplate;   // Boot 가 기본으로 만들어 줌
   private final AuthService authService;
   private final PhoneVerificationService phoneVerificationService;
+  private final EmailVerificationService emailVerificationService;
 
   public LoginResult signupCustomer(SignupCustomerRequest req) {
     return signup(req, Role.CUSTOMER, memberId -> { });   // 고객은 프로필 없음
@@ -67,7 +68,10 @@ public class SignupService {
         throw new BusinessException(MemberErrorCode.EMAIL_DUPLICATED);
       }
 
-      // ①-2 휴대폰 인증 표 (#164). 이메일 중복 같은 흔한 실패 뒤에 확인해 표가 헛되이 사라지지 않게
+      // ①-2 이메일 인증 표 (#207). 필수 — 없거나 틀리면 400 (부하 테스트 날 스위치를 끄면 표 없이 통과)
+      emailVerificationService.confirmSignupToken(req.email(), req.emailVerificationToken());
+
+      // ①-3 휴대폰 인증 표 (#164). 이메일 중복 같은 흔한 실패 뒤에 확인해 표가 헛되이 사라지지 않게
       //      표가 맞으면 인증된 회원으로, 없으면(건너뛰기) 미인증으로. 틀린 표는 400
       Member member = new Member(req.email(), req.name(), req.phone(), role);
       if (phoneVerificationService.confirmSignupToken(req.phone(), req.phoneVerificationToken())) {
