@@ -1,6 +1,8 @@
 package com.baedalsak.store.controller;
 
 import com.baedalsak.common.auth.LoginMember;
+import com.baedalsak.store.client.GeocodeResult;
+import com.baedalsak.store.domain.GeoPoint;
 import com.baedalsak.store.support.IntegrationTest;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -8,8 +10,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -119,6 +129,121 @@ class StoreManageControllerTest extends IntegrationTest {
             mockMvc.perform(owner(put("/v1/stores/999"), OWNER_ID).content(STORE_BODY))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
+        }
+    }
+
+    // #210 가게 주소 → 좌표. 카카오는 mock (기본 Unavailable, IntegrationTest)
+    @Nested
+    class 가게_좌표 {
+
+        static final GeoPoint MAPO = new GeoPoint(37.5663, 126.9019);
+        static final GeoPoint YONGSAN = new GeoPoint(37.5326, 126.9905);
+        static final String YONGSAN_BODY = """
+                {"name":"싹분식","category":"SNACK","address":"서울시 용산구 2","minOrderAmount":12000,"deliveryFee":3000}
+                """;
+
+        @Test
+        void 등록하면_주소를_좌표로_바꿔_저장한다() throws Exception {
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+
+            createStore(OWNER_ID).andExpect(status().isCreated());
+
+            assertThat(location(1L)).containsEntry("latitude", 37.5663).containsEntry("longitude", 126.9019);
+        }
+
+        @Test
+        void 카카오에_없는_주소면_400_이고_가게를_만들지_않는다() throws Exception {
+            given(kakaoLocalClient.geocode(any())).willReturn(new GeocodeResult.NotFound());
+
+            createStore(OWNER_ID)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value("address"));
+
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM store.store", Long.class)).isZero();
+        }
+
+        @Test
+        void 카카오를_확인하지_못하면_좌표_없이_만든다() throws Exception {
+            createStore(OWNER_ID).andExpect(status().isCreated());
+
+            assertThat(location(1L)).containsEntry("latitude", null).containsEntry("longitude", null);
+        }
+
+        @Test
+        void 주소를_바꾸면_다시_변환한다() throws Exception {
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+            given(kakaoLocalClient.geocode("서울시 용산구 2")).willReturn(new GeocodeResult.Found(YONGSAN));
+            createStore(OWNER_ID);
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OWNER_ID).content(YONGSAN_BODY))
+                    .andExpect(status().isOk());
+
+            assertThat(location(1L)).containsEntry("latitude", 37.5326).containsEntry("longitude", 126.9905);
+        }
+
+        @Test
+        void 주소가_같고_좌표가_있으면_카카오를_부르지_않는다() throws Exception {
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+            createStore(OWNER_ID);
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OWNER_ID).content(STORE_BODY))
+                    .andExpect(status().isOk());
+
+            verify(kakaoLocalClient, times(1)).geocode(any());
+            assertThat(location(1L)).containsEntry("latitude", 37.5663);
+        }
+
+        @Test
+        void 주소가_같아도_좌표가_없으면_다시_변환한다() throws Exception {
+            createStore(OWNER_ID);
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OWNER_ID).content(STORE_BODY))
+                    .andExpect(status().isOk());
+
+            assertThat(location(1L)).containsEntry("latitude", 37.5663);
+        }
+
+        @Test
+        void 바꾼_주소를_확인하지_못하면_이전_좌표를_지운다() throws Exception {
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+            createStore(OWNER_ID);
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OWNER_ID).content(YONGSAN_BODY))
+                    .andExpect(status().isOk());
+
+            // 예전 주소의 좌표가 남으면 다른 위치로 조회되므로 비운다
+            assertThat(location(1L)).containsEntry("latitude", null).containsEntry("longitude", null);
+        }
+
+        @Test
+        void 바꾼_주소가_카카오에_없으면_400_이고_수정하지_않는다() throws Exception {
+            given(kakaoLocalClient.geocode("서울시 마포구 1")).willReturn(new GeocodeResult.Found(MAPO));
+            given(kakaoLocalClient.geocode("서울시 용산구 2")).willReturn(new GeocodeResult.NotFound());
+            createStore(OWNER_ID);
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OWNER_ID).content(YONGSAN_BODY))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors[0].field").value("address"));
+
+            assertThat(jdbcTemplate.queryForObject("SELECT address FROM store.store WHERE id = 1", String.class))
+                    .isEqualTo("서울시 마포구 1");
+            assertThat(location(1L)).containsEntry("latitude", 37.5663);
+        }
+
+        @Test
+        void 남의_가게면_카카오를_부르기_전에_403() throws Exception {
+            createStore(OWNER_ID);
+
+            mockMvc.perform(owner(put("/v1/stores/1"), OTHER_OWNER_ID).content(YONGSAN_BODY))
+                    .andExpect(status().isForbidden());
+
+            verify(kakaoLocalClient, never()).geocode("서울시 용산구 2");
+        }
+
+        private Map<String, Object> location(long storeId) {
+            return jdbcTemplate.queryForMap("SELECT latitude, longitude FROM store.store WHERE id = ?", storeId);
         }
     }
 

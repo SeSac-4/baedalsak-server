@@ -313,6 +313,246 @@ class StoreQueryControllerTest extends IntegrationTest {
         }
     }
 
+    // 기준 위치 북위 37.5 · 동경 127.0. 위도 0.0089932도 ≈ 1000m, 동쪽 경도 0.0334403도 ≈ 2950m (북위 37.5도)
+    @Nested
+    class 주변_가게_반경_조회 {
+
+        static final String LAT = "37.5";
+        static final String LNG = "127.0";
+
+        @Test
+        void 반경_안_가게만_거리와_함께_준다() throws Exception {
+            createStore(1L, "1km", "SNACK");
+            createStore(2L, "북쪽2950m", "SNACK");
+            createStore(3L, "북쪽3050m", "SNACK");
+            createStore(4L, "동쪽2950m", "SNACK");
+            locate(1L, 37.5 + 0.0089932, 127.0);
+            locate(2L, 37.5 + 0.0265300, 127.0);
+            locate(3L, 37.5 + 0.0274293, 127.0);
+            locate(4L, 37.5, 127.0 + 0.0334403);
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(3))
+                    .andExpect(jsonPath("$.content[0].name").value("1km"))
+                    .andExpect(jsonPath("$.content[0].distanceM").value(1000))
+                    .andExpect(jsonPath("$.content[1].name").value("북쪽2950m"))
+                    .andExpect(jsonPath("$.content[1].distanceM").value(2950))
+                    // 경도 범위가 위도에 맞게 넓어져야 동쪽 2950m 가 들어온다
+                    .andExpect(jsonPath("$.content[2].name").value("동쪽2950m"))
+                    .andExpect(jsonPath("$.content[2].distanceM").value(2950));
+        }
+
+        @Test
+        void radius_로_반경을_바꾼다() throws Exception {
+            createStore(1L, "1km", "SNACK");
+            createStore(2L, "북쪽3050m", "SNACK");
+            locate(1L, 37.5 + 0.0089932, 127.0);
+            locate(2L, 37.5 + 0.0274293, 127.0);
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("radius", "500"))
+                    .andExpect(jsonPath("$.content.length()").value(0));
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("radius", "10000"))
+                    .andExpect(jsonPath("$.content.length()").value(2));
+        }
+
+        @Test
+        void 좌표가_없는_가게는_빠진다() throws Exception {
+            createStore(1L, "좌표있음", "SNACK");
+            createStore(2L, "좌표없음", "SNACK");
+            locate(1L, 37.5, 127.0);
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("좌표있음"))
+                    .andExpect(jsonPath("$.content[0].distanceM").value(0));
+        }
+
+        @Test
+        void 위치를_안_보내면_좌표와_무관하게_전체이고_거리는_null() throws Exception {
+            createStore(1L, "멀리", "SNACK");
+            createStore(2L, "좌표없음", "SNACK");
+            locate(1L, 35.1, 129.0);
+
+            mockMvc.perform(get("/v1/stores"))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].distanceM").isEmpty())
+                    .andExpect(jsonPath("$.content[1].distanceM").isEmpty());
+        }
+
+        @Test
+        void 폐업한_가게는_빠진다() throws Exception {
+            createStore(1L, "운영", "SNACK");
+            createStore(2L, "폐업", "SNACK");
+            locate(1L, 37.5, 127.0);
+            locate(2L, 37.5, 127.0);
+            jdbcTemplate.update("UPDATE store.store SET deleted_at = now() WHERE id = 2");
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("운영"));
+        }
+
+        @Test
+        void 카테고리_검색어와_함께_거른다() throws Exception {
+            createStore(1L, "치킨떡볶이", "SNACK");
+            createStore(2L, "바삭치킨", "CHICKEN");
+            createStore(3L, "먼바삭치킨", "CHICKEN");
+            locate(1L, 37.5, 127.0);
+            locate(2L, 37.5, 127.0);
+            locate(3L, 37.5 + 0.0449661, 127.0);
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG)
+                            .param("category", "CHICKEN").param("q", "치킨"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("바삭치킨"));
+        }
+
+        @Test
+        void 검색어의_퍼센트와_밑줄_느낌표는_글자로_찾는다() throws Exception {
+            createStore(1L, "100%치킨", "CHICKEN");
+            createStore(2L, "1000치킨", "CHICKEN");
+            createStore(3L, "a_b분식", "SNACK");
+            createStore(4L, "axb분식", "SNACK");
+            createStore(5L, "대박!분식", "SNACK");
+            for (long id = 1; id <= 5; id++) {
+                locate(id, 37.5, 127.0);
+            }
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("q", "%"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("100%치킨"));
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("q", "a_b"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("a_b분식"));
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("q", "!"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].name").value("대박!분식"));
+        }
+
+        @Test
+        void 반경_결과도_커서로_나눈다() throws Exception {
+            // id 1 · 3 · 4 만 반경 안
+            for (long owner = 1; owner <= 4; owner++) {
+                createStore(owner, "가게" + owner, "SNACK");
+            }
+            locate(1L, 37.5, 127.0);
+            locate(2L, 37.5 + 0.0449661, 127.0);
+            locate(3L, 37.5, 127.0);
+            locate(4L, 37.5, 127.0);
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("size", "2"))
+                    .andExpect(jsonPath("$.content[0].id").value(1))
+                    .andExpect(jsonPath("$.content[1].id").value(3))
+                    .andExpect(jsonPath("$.hasNext").value(true))
+                    .andExpect(jsonPath("$.nextCursor").value("3"));
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("size", "2")
+                            .param("cursor", "3"))
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(4))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        void 반경_밖_가게가_많아도_한_페이지를_채운다() throws Exception {
+            // id 1~3 반경 밖, 4~6 반경 안 → size 2 첫 페이지는 4, 5 (조회 뒤 거르면 빈 페이지가 된다)
+            for (long owner = 1; owner <= 6; owner++) {
+                createStore(owner, "가게" + owner, "SNACK");
+                locate(owner, owner <= 3 ? 35.1 : 37.5, owner <= 3 ? 129.0 : 127.0);
+            }
+
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("size", "2"))
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(4))
+                    .andExpect(jsonPath("$.content[1].id").value(5))
+                    .andExpect(jsonPath("$.hasNext").value(true));
+        }
+
+        @ParameterizedTest
+        @CsvSource(delimiter = '|', value = {
+                "lat=37.5|lng",
+                "lng=127.0|lat",
+                "radius=3000|radius",
+                "lat=90.1&lng=127.0|lat",
+                "lat=-90.1&lng=127.0|lat",
+                "lat=37.5&lng=180.1|lng",
+                "lat=NaN&lng=127.0|lat",
+                "lat=37.5&lng=Infinity|lng",
+                "lat=37.5&lng=127.0&radius=0|radius",
+                "lat=37.5&lng=127.0&radius=10001|radius",
+        })
+        void 위치_파라미터가_잘못되면_400(String query, String field) throws Exception {
+            mockMvc.perform(get("/v1/stores?" + query))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value(field));
+            mockMvc.perform(get("/v1/stores/summary?" + query))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+
+        @Test
+        void 숫자가_아니면_400() throws Exception {
+            mockMvc.perform(get("/v1/stores").param("lat", "abc").param("lng", LNG))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+
+        @Test
+        void 반경_경계값_1m_와_10000m_는_허용한다() throws Exception {
+            mockMvc.perform(get("/v1/stores").param("lat", LAT).param("lng", LNG).param("radius", "1"))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/v1/stores").param("lat", "90").param("lng", "-180").param("radius", "10000"))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Nested
+    class 주변_가게_통계 {
+
+        @Test
+        void 목록과_같은_반경_안_가게_기준으로_센다() throws Exception {
+            createStore(10L, "가까운분식", "SNACK", 2000);
+            createStore(20L, "가까운치킨", "CHICKEN", 3000);
+            createStore(30L, "먼분식", "SNACK", 0);
+            createStore(40L, "좌표없는분식", "SNACK", 0);
+            locate(1L, 37.5, 127.0);
+            locate(2L, 37.5 + 0.0089932, 127.0);
+            locate(3L, 37.5 + 0.0449661, 127.0);
+            // 영업 중: 1번(반경 안) · 3번(반경 밖) → 반경 기준 1
+            open(10L, 1L);
+            open(30L, 3L);
+
+            mockMvc.perform(get("/v1/stores/summary").param("lat", "37.5").param("lng", "127.0"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalCount").value(2))
+                    .andExpect(jsonPath("$.openCount").value(1))
+                    .andExpect(jsonPath("$.minDeliveryFee").value(2000))
+                    .andExpect(jsonPath("$.categoryCounts.SNACK").value(1))
+                    .andExpect(jsonPath("$.categoryCounts.CHICKEN").value(1))
+                    .andExpect(jsonPath("$.categoryCounts.length()").value(6));
+
+            // 위치가 없으면 지금처럼 전체 기준
+            mockMvc.perform(get("/v1/stores/summary"))
+                    .andExpect(jsonPath("$.totalCount").value(4))
+                    .andExpect(jsonPath("$.openCount").value(2))
+                    .andExpect(jsonPath("$.minDeliveryFee").value(0));
+        }
+
+        @Test
+        void 반경_안에_가게가_없으면_0_이고_최저_배달비는_null() throws Exception {
+            createStore(10L, "먼분식", "SNACK");
+            locate(1L, 35.1, 129.0);
+
+            mockMvc.perform(get("/v1/stores/summary").param("lat", "37.5").param("lng", "127.0"))
+                    .andExpect(jsonPath("$.totalCount").value(0))
+                    .andExpect(jsonPath("$.openCount").value(0))
+                    .andExpect(jsonPath("$.minDeliveryFee").isEmpty())
+                    .andExpect(jsonPath("$.categoryCounts.SNACK").value(0));
+        }
+    }
+
     @Nested
     class 가게_상세 {
 
@@ -378,6 +618,11 @@ class StoreQueryControllerTest extends IntegrationTest {
                 """.formatted(name, category, deliveryFee);
         mockMvc.perform(owner(post("/v1/stores"), ownerId).content(body))
                 .andExpect(status().isCreated());
+    }
+
+    // 가게 좌표를 직접 넣는다 (등록 때 카카오는 mock 이라 좌표 없이 저장됨)
+    private void locate(long storeId, double lat, double lng) {
+        jdbcTemplate.update("UPDATE store.store SET latitude = ?, longitude = ? WHERE id = ?", lat, lng, storeId);
     }
 
     private void open(long ownerId, long storeId) throws Exception {
