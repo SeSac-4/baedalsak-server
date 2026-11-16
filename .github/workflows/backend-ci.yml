@@ -6,7 +6,7 @@
 #   develop push 가 성공하면 notify-infra 가 실행되어 AWS 배포 (실패한 커밋은 배포 안 됨)
 #   이미지 push 없음 — 배포 이미지는 baedalsak-infra 가 ECR 에 빌드 (develop 머지 시 notify-infra)
 #
-#   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json
+#   서비스 ↔ 모듈 폴더 목록: .github/backend-services.json (common 은 이미지가 없어 목록 밖 — "common 테스트" 잡이 따로 실행)
 #   서비스별 실제 작업: .github/workflows/_backend-service.yml (재사용 워크플로)
 #
 #   브랜치 보호 규칙의 필수 체크로는 마지막 job "backend-ci 결과" 하나만 지정하세요.
@@ -68,17 +68,51 @@ jobs:
       service: ${{ matrix.name }}
       module: ${{ matrix.module }}
 
+  # common 모듈 테스트 (#203) — common 은 라이브러리라 이미지가 없어 service 목록에 넣지 않고 테스트만 따로 돌린다
+  #   서비스가 하나라도 대상이면 실행 (common 이 바뀌면 changed-services.sh 가 6개 전체를 대상으로 잡음)
+  common:
+    name: common 테스트
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: 테스트 실행
+        run: |
+          chmod +x gradlew
+          ./gradlew :common:test --no-daemon
+
+      - name: 테스트 리포트 업로드 (실패 시)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-report-common
+          path: common/build/reports/tests/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # 브랜치 보호 규칙용 단일 체크 (변경 서비스가 없어 service 가 건너뛰어져도 통과)
   result:
     name: backend-ci 결과
-    needs: [changes, service]
+    needs: [changes, service, common]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - env:
           CHANGES: ${{ needs.changes.result }}
           SERVICE: ${{ needs.service.result }}
+          COMMON: ${{ needs.common.result }}
         run: |
-          echo "changes=$CHANGES service=$SERVICE"
+          echo "changes=$CHANGES service=$SERVICE common=$COMMON"
           [ "$CHANGES" = "success" ] || exit 1
           case "$SERVICE" in success|skipped) ;; *) exit 1 ;; esac
+          case "$COMMON" in success|skipped) ;; *) exit 1 ;; esac
