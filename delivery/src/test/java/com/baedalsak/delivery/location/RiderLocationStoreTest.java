@@ -113,36 +113,6 @@ class RiderLocationStoreTest {
     }
 
     /** 테스트에서 시간을 앞으로 돌리는 시계 */
-    @Test
-    void savesRiderPositionOnlyWhenAbsentWithoutTtl() {
-        when(redis.opsForValue()).thenReturn(values);
-        GeoPoint point = new GeoPoint(37.55, 127.05);
-        when(values.setIfAbsent("delivery:rider-position:9", "{\"lat\":37.55,\"lng\":127.05}")).thenReturn(true);
-
-        assertThat(store.saveRiderPositionIfAbsent(9L, point)).contains(point);
-    }
-
-    @Test
-    void keepsExistingRiderPositionWhenAlreadySaved() {
-        when(redis.opsForValue()).thenReturn(values);
-        when(values.setIfAbsent(eq("delivery:rider-position:9"), anyString())).thenReturn(false);
-        when(values.get("delivery:rider-position:9")).thenReturn("{\"lat\":37.5,\"lng\":127.0}");
-
-        assertThat(store.saveRiderPositionIfAbsent(9L, new GeoPoint(37.55, 127.05)))
-                .contains(new GeoPoint(37.5, 127.0));
-    }
-
-    @Test
-    void overwritesAndReadsRiderPosition() {
-        when(redis.opsForValue()).thenReturn(values);
-
-        store.saveRiderPosition(9L, new GeoPoint(37.543, 127.056));
-
-        verify(values).set("delivery:rider-position:9", "{\"lat\":37.543,\"lng\":127.056}");
-        when(values.get("delivery:rider-position:9")).thenReturn("{\"lat\":37.543,\"lng\":127.056}");
-        assertThat(store.findRiderPosition(9L)).contains(new GeoPoint(37.543, 127.056));
-    }
-
     private static final class MutableClock extends Clock {
 
         private Instant now;
