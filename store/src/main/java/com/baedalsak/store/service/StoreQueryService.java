@@ -5,6 +5,7 @@ import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.store.config.ImageProperties;
 import com.baedalsak.store.domain.BusinessHour;
 import com.baedalsak.store.domain.Category;
+import com.baedalsak.store.domain.NearbyArea;
 import com.baedalsak.store.domain.Store;
 import com.baedalsak.store.dto.response.CategoryResponse;
 import com.baedalsak.store.dto.response.CursorResponse;
@@ -50,10 +51,14 @@ public class StoreQueryService {
     // 카테고리가 없으면 전체 가게. id 순 커서 조회로, size + 1 개를 읽어 다음 페이지 여부를 판단한다 (count 쿼리 없음)
     // 오늘 영업시간은 그 페이지 가게만 한 번에 조회한다
     // q 가 있으면 가게 이름 부분 일치 검색 (#178). 앞뒤 공백은 지우고, 공백만이면 검색어 없음
-    public CursorResponse<StoreSummaryResponse> getStores(Category category, String q, Long cursor, int size) {
+    // area 가 있으면 반경 안 가게만, 각 항목에 고객 위치까지 거리 (#210). 정렬 · 커서는 위치가 없을 때와 같은 id 순
+    public CursorResponse<StoreSummaryResponse> getStores(Category category, String q, Long cursor, int size,
+                                                          NearbyArea area) {
         long after = cursor == null ? 0L : cursor;
         Limit limit = Limit.of(size + 1);
-        List<Store> fetched = findStores(category, normalize(q), after, limit);
+        List<Store> fetched = area == null
+                ? findStores(category, normalize(q), after, limit)
+                : storeRepository.findNearby(category, toLikePattern(normalize(q)), after, area, limit);
         if (fetched.isEmpty()) {
             return CursorResponse.last(List.of());
         }
@@ -69,7 +74,7 @@ public class StoreQueryService {
 
         List<StoreSummaryResponse> content = stores.stream()
                 .map(store -> StoreSummaryResponse.of(store, todayHours.get(store.getId()), now.toLocalTime(),
-                        imageProperties))
+                        imageProperties, area == null ? null : area.distanceTo(store)))
                 .toList();
         if (!hasNext) {
             return CursorResponse.last(content);
@@ -96,15 +101,28 @@ public class StoreQueryService {
         return q.strip();
     }
 
+    // 반경 조회의 LIKE 패턴: 부분 일치 %검색어%, 검색어가 없으면 전체 %.
+    // % · _ 를 글자로 찾도록 이스케이프 문자 ! 를 붙인다 (Containing 과 같은 결과)
+    private static String toLikePattern(String name) {
+        if (name == null) {
+            return "%";
+        }
+        return "%" + name.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+    }
+
     // 가게 목록 통계 (#169). 카테고리별 집계 1번 + 영업 중 수 1번, 가게 수와 무관하게 쿼리 2개
-    public StoreListSummaryResponse getStoreListSummary() {
+    // area 가 있으면 두 쿼리 모두 목록과 같은 반경 안 가게 기준 (#210)
+    public StoreListSummaryResponse getStoreListSummary(NearbyArea area) {
         Map<Category, Long> categoryCounts = new EnumMap<>(Category.class);
         for (Category category : Category.values()) {
             categoryCounts.put(category, 0L);
         }
         long totalCount = 0;
         Integer minDeliveryFee = null;
-        for (Object[] row : storeRepository.countAndMinDeliveryFeeByCategory()) {
+        List<Object[]> rows = area == null
+                ? storeRepository.countAndMinDeliveryFeeByCategory()
+                : storeRepository.countAndMinDeliveryFeeByCategoryNearby(area);
+        for (Object[] row : rows) {
             long count = (Long) row[1];
             int fee = (Integer) row[2];
             categoryCounts.put((Category) row[0], count);
@@ -113,7 +131,10 @@ public class StoreQueryService {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
-        long openCount = storeRepository.countOpenAt(BusinessHour.toDbValue(now.getDayOfWeek()), now.toLocalTime());
+        short today = BusinessHour.toDbValue(now.getDayOfWeek());
+        long openCount = area == null
+                ? storeRepository.countOpenAt(today, now.toLocalTime())
+                : storeRepository.countOpenAtNearby(today, now.toLocalTime(), area);
         return new StoreListSummaryResponse(totalCount, openCount, minDeliveryFee, categoryCounts);
     }
 
