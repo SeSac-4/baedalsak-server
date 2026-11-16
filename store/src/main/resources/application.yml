@@ -1,6 +1,7 @@
 # store 서비스 (메뉴·가게)
 # 환경 변수 이름은 docs/backend-infra-rules.md 3번 표를 그대로 쓴다.
 # 로컬 .env -> Kubernetes Secret -> AWS Secrets Manager 까지 이 이름이 이어지므로 바꾸지 말 것.
+# 외부 API: KAKAO_REST_API_KEY (카카오 로컬 REST 키, 🔒 .env 에만). 비어 있으면 가게 좌표 없이 저장한다 (#210)
 
 server:
   port: ${SERVER_PORT:8081}          # 로컬 VSCode 실행 시 포트 (docs 1번 표). 컨테이너 안에서는 8080
@@ -76,6 +77,13 @@ image:
   bucket: ${IMAGE_BUCKET:baedalsak-images}
   base-url: ${IMAGE_BASE_URL:https://baedalsak.click/images}  # imageUrl = base-url + / + imageKey (CloudFront 가 /images 를 떼고 S3 로)
   upload-url-ttl: 5m                                        # 업로드 URL 만료
+
+# 카카오 로컬 API — 가게 주소 → 좌표 (#210, 주변 가게 반경 조회). delivery 와 같은 키
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}   # 🔒 기본값 없음. 비어 있으면 호출하지 않음 (좌표 없이 저장)
+  local-base-url: https://dapi.kakao.com
+  connect-timeout: 500ms
+  read-timeout: 2s
 
 management:
   endpoints:

@@ -10,6 +10,7 @@ import java.time.LocalTime;
 
 /**
  * 가게 목록 항목 (StoreSummary, GET /v1/stores 응답)
+ * distanceM: 고객 위치까지 직선거리 (m 정수, #210). 위치를 보내지 않았으면 null
  */
 public record StoreSummaryResponse(
         Long id,
@@ -21,15 +22,18 @@ public record StoreSummaryResponse(
         boolean isOpenNow,
         BusinessHourResponse todayHour,
         String imageKey,
-        String imageUrl
+        String imageUrl,
+        Integer distanceM
 ) {
 
     /**
      * @param todayHour 오늘 요일의 영업시간
      * @param now       한국 시각 기준 현재 시각
      * @param images    사진 URL 을 만들 CDN 설정
+     * @param distanceM 고객 위치까지 거리 (m). 위치를 보내지 않았으면 null
      */
-    public static StoreSummaryResponse of(Store store, BusinessHour todayHour, LocalTime now, ImageProperties images) {
+    public static StoreSummaryResponse of(Store store, BusinessHour todayHour, LocalTime now, ImageProperties images,
+                                          Integer distanceM) {
         return new StoreSummaryResponse(
                 store.getId(),
                 store.getName(),
@@ -40,7 +44,8 @@ public record StoreSummaryResponse(
                 store.isOpenAt(todayHour, now),
                 BusinessHourResponse.from(todayHour),
                 store.getImageKey(),
-                images.urlOf(store.getImageKey())
+                images.urlOf(store.getImageKey()),
+                distanceM
         );
     }
 }

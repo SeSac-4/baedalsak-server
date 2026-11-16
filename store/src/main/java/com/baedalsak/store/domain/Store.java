@@ -22,6 +22,7 @@ import java.time.OffsetDateTime;
  * 가게 (store 테이블). 사장님 1명 = 가게 1개 (owner_id UNIQUE).
  * 등록 직후 운영 상태는 임시 중지(PAUSED)로 시작한다 (1.2.1).
  * 폐업은 soft delete (deleted_at, #176). 폐업한 가게는 JPA 조회 전체에서 빠진다 (@SQLRestriction).
+ * 좌표(latitude · longitude)는 주소를 카카오로 변환한 값 (#210). 변환 전이거나 실패하면 null → 반경 조회에서 빠진다.
  */
 @Entity
 @SQLRestriction("deleted_at IS NULL")
@@ -61,6 +62,11 @@ public class Store {
     // 사진 S3 키 (stores/{id}/…). null 이면 사진 없음
     private String imageKey;
 
+    // 주소 좌표 (#210). 둘 다 있거나 둘 다 null
+    private Double latitude;
+
+    private Double longitude;
+
     // 폐업 시각. null 이면 운영 중
     private OffsetDateTime deletedAt;
 
@@ -94,6 +100,22 @@ public class Store {
         this.minOrderAmount = minOrderAmount;
         this.deliveryFee = deliveryFee;
         this.imageKey = imageKey;
+    }
+
+    // 좌표를 바꾼다. null 이면 좌표 없음 (주소가 바뀌었는데 변환하지 못한 경우)
+    public void relocate(GeoPoint location) {
+        this.latitude = location == null ? null : location.lat();
+        this.longitude = location == null ? null : location.lng();
+    }
+
+    // 이 주소로 저장하려면 좌표를 (다시) 변환해야 하는지: 주소가 바뀌었거나, 지난번에 변환하지 못했으면 true
+    public boolean needsGeocoding(String newAddress) {
+        return !address.equals(newAddress) || latitude == null || longitude == null;
+    }
+
+    // 좌표가 없으면 null
+    public GeoPoint getLocation() {
+        return latitude == null || longitude == null ? null : new GeoPoint(latitude, longitude);
     }
 
     public void changeOperationStatus(OperationStatus operationStatus) {

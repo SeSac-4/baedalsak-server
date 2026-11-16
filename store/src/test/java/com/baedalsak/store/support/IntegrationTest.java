@@ -1,5 +1,7 @@
 package com.baedalsak.store.support;
 
+import com.baedalsak.store.client.GeocodeResult;
+import com.baedalsak.store.client.KakaoLocalClient;
 import com.baedalsak.store.client.OrderClient;
 import com.baedalsak.store.config.ImageProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,9 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 
 /**
  * 실제 PostgreSQL(컨테이너)에 Flyway 를 적용하고 MockMvc 로 API 를 호출하는 통합 테스트 기반.
@@ -63,8 +68,13 @@ public abstract class IntegrationTest {
     @MockitoBean
     protected OrderClient orderClient;
 
+    // 카카오 로컬 API (가게 주소 → 좌표, #210). 기본은 확인 못 함 → 좌표 없이 저장. 테스트마다 초기화된다
+    @MockitoBean
+    protected KakaoLocalClient kakaoLocalClient;
+
     @BeforeEach
     void cleanUp() {
+        given(kakaoLocalClient.geocode(any())).willReturn(new GeocodeResult.Unavailable());
         jdbcTemplate.execute("TRUNCATE store.menu, store.business_hour, store.store RESTART IDENTITY");
     }
 

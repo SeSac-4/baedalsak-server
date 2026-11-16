@@ -183,6 +183,8 @@ services:
       DB_SCHEMA: store
       # [내부] 동기 호출 — 가게 폐업 전 진행 중 주문 확인 (#176)
       ORDER_SERVICE_URL: http://order:8080
+      # 카카오 REST 키 — 가게 주소 → 좌표 (#210). 없으면 좌표 없이 저장 (반경 조회에서 빠짐)
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
 
   # 주문·장바구니
   order:

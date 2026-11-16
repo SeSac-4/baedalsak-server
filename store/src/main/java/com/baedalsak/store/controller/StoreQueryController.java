@@ -3,6 +3,7 @@ package com.baedalsak.store.controller;
 import com.baedalsak.common.auth.CurrentMember;
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.store.domain.Category;
+import com.baedalsak.store.dto.request.NearbyQuery;
 import com.baedalsak.store.dto.response.CursorResponse;
 import com.baedalsak.store.dto.response.StoreDetailResponse;
 import com.baedalsak.store.dto.response.StoreListSummaryResponse;
@@ -31,19 +32,26 @@ public class StoreQueryController {
     // 1.1.1 가게 목록 (무한 스크롤, #169). category 가 없으면 전체, 없는 카테고리 값이면 400
     //   q: 가게 이름 검색 (#178, 부분 일치 · 대소문자 무시, 최대 50자), cursor: 이전 응답의 nextCursor (없으면 처음부터),
     //   size: 기본 20·최대 100
+    //   lat · lng · radius: 고객 위치 기준 반경 안 가게만 (#210, NearbyQuery). 다음 페이지도 같은 값으로 요청한다
     @GetMapping
     public CursorResponse<StoreSummaryResponse> getStores(@RequestParam(required = false) Category category,
                                                           @RequestParam(required = false) @Size(max = 50) String q,
                                                           @RequestParam(required = false) @Min(1) Long cursor,
-                                                          @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return storeQueryService.getStores(category, q, cursor, size);
+                                                          @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+                                                          @RequestParam(required = false) Double lat,
+                                                          @RequestParam(required = false) Double lng,
+                                                          @RequestParam(required = false) Integer radius) {
+        return storeQueryService.getStores(category, q, cursor, size, new NearbyQuery(lat, lng, radius).toArea());
     }
 
     // 가게 목록 통계 (#169): 홈 배너(영업 중 수 · 최저 배달비), PC 카테고리 타일(가게 수)
     //   /{storeId} 보다 먼저 매칭된다 (경로 리터럴 우선)
+    //   lat · lng · radius: 목록과 같은 반경 안 가게 기준 (#210). 없으면 전체 기준
     @GetMapping("/summary")
-    public StoreListSummaryResponse getStoreListSummary() {
-        return storeQueryService.getStoreListSummary();
+    public StoreListSummaryResponse getStoreListSummary(@RequestParam(required = false) Double lat,
+                                                        @RequestParam(required = false) Double lng,
+                                                        @RequestParam(required = false) Integer radius) {
+        return storeQueryService.getStoreListSummary(new NearbyQuery(lat, lng, radius).toArea());
     }
 
     // 8.3.1 내 가게 조회. /{storeId} 보다 먼저 매칭된다 (경로 리터럴 우선)
