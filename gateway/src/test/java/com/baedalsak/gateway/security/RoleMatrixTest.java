@@ -27,6 +27,7 @@ import reactor.core.publisher.Mono;
  */
 @SpringBootTest(properties = {
     "COGNITO_ISSUER_URI=https://issuer.test",   // 진짜 Cognito 대신 아래 가짜 토큰 해석기를 씀
+    "COGNITO_CLIENT_ID=test-client",            // client_id 검사기(#204) 기동용 — 가짜 해석기라 검사는 안 거침
     "REDIS_SESSION_PASSWORD=test",
     "spring.data.redis.port=1",                 // Redis 없음 → 블랙리스트는 fail-open 으로 통과
     "rate-limit.enabled=false",

@@ -1,5 +1,6 @@
 package com.baedalsak.gateway.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -99,5 +100,15 @@ public class SecurityConfig {
     @Bean
     OAuth2TokenValidator<Jwt> accessTokenOnlyValidator() {
         return new JwtClaimValidator<String>("token_use", "access"::equals);
+    }
+
+    /**
+     * client_id 가 우리 앱 클라이언트(member)인 토큰만 받는다 (#204).
+     * 같은 풀에 앱 클라이언트가 늘어나도, 그 클라이언트로 발급된 토큰은 401.
+     * token_use 검사기처럼 Boot 가 JwtDecoder 검사 목록에 자동으로 추가한다.
+     */
+    @Bean
+    OAuth2TokenValidator<Jwt> clientIdValidator(@Value("${cognito.client-id}") String clientId) {
+        return new JwtClaimValidator<String>("client_id", clientId::equals);
     }
 }
