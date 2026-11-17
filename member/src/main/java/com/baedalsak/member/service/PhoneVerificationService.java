@@ -25,7 +25,8 @@ import lombok.RequiredArgsConstructor;
  * 입구 두 개:
  *   가입 전  : 번호로 코드 → 맞으면 "인증 완료 표"(10분, 1회용) → 가입 요청에 실어 보내면 가입과 동시에 인증 기록
  *   가입 후  : 로그인한 회원의 DB 번호로 코드 → 맞으면 phone_verified_at 기록 (가입 때 건너뛴 사람 · 기존 회원)
- * 가입 때 인증 필수 여부는 sms.verification-required (SMS 샌드박스 동안 false = 건너뛰기 허용)
+ *   번호 변경: 새 번호로 코드 → 맞으면 번호를 바꾸고 인증 시각 기록 (#208). 스위치가 꺼져 있으면 인증 없이 변경 가능(미인증)
+ * 가입 · 번호 변경 때 인증 필수 여부는 sms.verification-required (SMS 샌드박스 동안 false = 건너뛰기 허용)
  * 규칙: 코드 3분 · 5번 틀리면 폐기 · 재발송 60초 간격 · 번호당 하루 5통
  */
 @Service
@@ -94,6 +95,45 @@ public class PhoneVerificationService {
     }
     checkCode(normalize(member.getPhone()), code);
     member.markPhoneVerified();   // 트랜잭션 끝에 UPDATE
+  }
+
+  // ---------- 번호 변경 (#208, 내 정보) ----------
+
+  /** 새 번호로 인증번호 문자를 보낸다. 지금 번호와 같으면 400 */
+  public void sendChangeCode(long memberId, String rawNewPhone) {
+    Member member = findMember(memberId);
+    String newPhone = normalize(rawNewPhone);
+    checkDifferent(member, newPhone);
+    sendTo(newPhone);
+  }
+
+  /** 새 번호로 받은 코드를 확인하고, 맞으면 번호를 바꾸고 인증된 번호로 기록한다 */
+  @Transactional
+  public void verifyChange(long memberId, String rawNewPhone, String code) {
+    Member member = findMember(memberId);
+    String newPhone = normalize(rawNewPhone);
+    checkDifferent(member, newPhone);
+    checkCode(newPhone, code);
+    member.changePhone(rawNewPhone, true);   // 저장 형식은 가입과 같게 입력값 그대로
+  }
+
+  /** 인증 없이 바로 변경 — 스위치가 꺼져 있을 때만(SMS 샌드박스). 새 번호는 미인증이라 알림 문자가 가지 않음 */
+  @Transactional
+  public void changeWithoutVerification(long memberId, String rawNewPhone) {
+    if (props.verificationRequired()) {
+      throw new BusinessException(MemberErrorCode.PHONE_CHANGE_VERIFICATION_REQUIRED);
+    }
+    Member member = findMember(memberId);
+    checkDifferent(member, normalize(rawNewPhone));
+    member.changePhone(rawNewPhone, false);
+  }
+
+  // 지금 번호와 같으면 바꿀 게 없음 → 400 (문자 비용도 아끼기)
+  private static void checkDifferent(Member member, String newPhone) {
+    if (normalize(member.getPhone()).equals(newPhone)) {
+      throw new BusinessException(CommonErrorCode.VALIDATION_FAILED,
+          List.of(new FieldErrorDetail("phone", "지금 번호와 같은 번호입니다.")));
+    }
   }
 
   // ---------- 공통 ----------

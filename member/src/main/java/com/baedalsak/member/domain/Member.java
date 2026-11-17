@@ -68,6 +68,17 @@ public class Member {
     this.updatedAt = this.phoneVerifiedAt;
   }
 
+  /**
+   * 전화번호 변경 (#208). 새 번호로 인증했으면 인증 시각을 지금으로, 인증 없이 바꿨으면(스위치 꺼짐) 미인증으로.
+   * 예전 번호의 인증은 새 번호에 이어지지 않는다 — 인증 안 된 번호로는 알림 문자가 가지 않게
+   */
+  public void changePhone(String phone, boolean verified) {
+    OffsetDateTime now = OffsetDateTime.now();
+    this.phone = phone;
+    this.phoneVerifiedAt = verified ? now : null;
+    this.updatedAt = now;
+  }
+
   public boolean isPhoneVerified() {
     return phoneVerifiedAt != null;
   }

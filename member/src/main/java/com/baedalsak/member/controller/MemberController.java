@@ -4,6 +4,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -14,6 +15,8 @@ import com.baedalsak.common.auth.CurrentMember;
 import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.member.auth.AuthCookies;
 import com.baedalsak.member.dto.MemberMeResponse;
+import com.baedalsak.member.dto.PhoneChangeRequest;
+import com.baedalsak.member.dto.PhoneChangeVerifyRequest;
 import com.baedalsak.member.dto.PhoneVerifyRequest;
 import com.baedalsak.member.service.MemberQueryService;
 import com.baedalsak.member.service.MemberWithdrawService;
@@ -52,6 +55,30 @@ public class MemberController {
   public ResponseEntity<Void> verifyPhone(@CurrentMember LoginMember me,
       @Valid @RequestBody PhoneVerifyRequest req) {
     phoneVerificationService.verify(me.id(), req.code());
+    return ResponseEntity.noContent().build();
+  }
+
+  // 전화번호 변경 ① 새 번호로 인증번호 받기 (#208) — 202. 지금 번호와 같으면 400 errors[phone] · 60초 간격 · 하루 5통 넘으면 429
+  @PostMapping("/me/phone/change/code")
+  public ResponseEntity<Void> sendPhoneChangeCode(@CurrentMember LoginMember me,
+      @Valid @RequestBody PhoneChangeRequest req) {
+    phoneVerificationService.sendChangeCode(me.id(), req.phone());
+    return ResponseEntity.accepted().build();
+  }
+
+  // 전화번호 변경 ② 코드 확인 → 번호 변경 + 인증됨 (#208) — 204. 틀림·만료 400 errors[code] · 5번 틀리면 429
+  @PostMapping("/me/phone/change/verify")
+  public ResponseEntity<Void> verifyPhoneChange(@CurrentMember LoginMember me,
+      @Valid @RequestBody PhoneChangeVerifyRequest req) {
+    phoneVerificationService.verifyChange(me.id(), req.phone(), req.code());
+    return ResponseEntity.noContent().build();
+  }
+
+  // 전화번호 변경 (인증 없이, #208) — 204, 새 번호는 미인증. 휴대폰 인증 필수 스위치가 켜져 있으면 403
+  @PatchMapping("/me/phone")
+  public ResponseEntity<Void> changePhone(@CurrentMember LoginMember me,
+      @Valid @RequestBody PhoneChangeRequest req) {
+    phoneVerificationService.changeWithoutVerification(me.id(), req.phone());
     return ResponseEntity.noContent().build();
   }
 
