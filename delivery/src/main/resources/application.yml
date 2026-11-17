@@ -33,6 +33,8 @@ spring:
     schemas: ${DB_SCHEMA:delivery}       # 마이그레이션 대상 = 자기 schema (flyway_schema_history 도 여기)
     default-schema: ${DB_SCHEMA:delivery}
     create-schemas: false             # DB·schema·계정은 초기화 스크립트(로컬) / Terraform(운영)이 만듦
+    # 이미 실행된 마이그레이션 파일이 코드에서 사라져도 시작을 막지 않는다 (지운 seed R__delivery_seed 등, #219)
+    ignore-migration-patterns: "*:missing"
   jpa:
     open-in-view: false               # 트랜잭션이 끝나면 바로 커넥션 반납 (docs 4-2)
     hibernate:
