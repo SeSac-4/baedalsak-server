@@ -1,8 +1,8 @@
 package com.baedalsak.delivery.dto;
 
-import com.baedalsak.delivery.location.GeoPoint;
-import com.baedalsak.delivery.location.Route;
-import com.baedalsak.delivery.location.RouteLeg;
+import com.baedalsak.delivery.location.geo.GeoPoint;
+import com.baedalsak.delivery.location.geo.Route;
+import com.baedalsak.delivery.location.geo.RouteLeg;
 
 import java.util.List;
 

@@ -2,7 +2,7 @@ package com.baedalsak.delivery.dto;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
-import com.baedalsak.delivery.location.GeoPoint;
+import com.baedalsak.delivery.location.geo.GeoPoint;
 
 import java.time.OffsetDateTime;
 

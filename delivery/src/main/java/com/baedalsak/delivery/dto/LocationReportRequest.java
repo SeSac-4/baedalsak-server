@@ -1,6 +1,6 @@
 package com.baedalsak.delivery.dto;
 
-import com.baedalsak.delivery.location.GeoPoint;
+import com.baedalsak.delivery.location.geo.GeoPoint;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;

@@ -5,7 +5,7 @@ import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.exception.BusinessException;
 import com.baedalsak.delivery.exception.ErrorCode;
-import com.baedalsak.delivery.location.PickupCompletedEvent;
+import com.baedalsak.delivery.location.event.PickupCompletedEvent;
 import com.baedalsak.delivery.payload.DeliveryPickedUpEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.OutboxRepository;
