@@ -23,7 +23,7 @@ import com.baedalsak.common.messaging.ListenerErrorHandler;
 import com.baedalsak.common.messaging.ListenerFailureRecoverer;
 
 /**
- * 주문·배달 알림 문자 큐 (#182). member 는 이벤트를 발행하지 않고 구독만 한다.
+ * 주문·배달 알림 문자 큐 (#182 고객 · #217 사장님 새 주문). member 는 이벤트를 발행하지 않고 구독만 한다.
  * 큐는 받는 서비스가 선언·소유한다 (docs 3-1) → member.sms.* 와 DLQ 를 member 가 선언.
  * 규칙은 메일 큐와 같다 (docs 10-3·10-4): quorum · deliveryLimit 3 · DLX member.dlx → <큐>.dlq
  * 이미 만들어진 큐의 인자(DLX·quorum 등)를 바꾸면 PRECONDITION_FAILED 로 앱이 시작되지 않으니 주의.
@@ -34,14 +34,16 @@ public class RabbitConfig {
   public static final String EVENTS_EXCHANGE = "baedalsak.events";   // 팀 공통 exchange
   public static final String DEAD_LETTER_EXCHANGE = "member.dlx";
 
-  // 구독하는 이벤트 (발행: order · delivery). 이름이 바뀌면 문자가 안 감 → 팀에 공지
+  // 구독하는 이벤트 (발행: order · delivery · payment). 이름이 바뀌면 문자가 안 감 → 팀에 공지
   public static final String ORDER_ACCEPTED_ROUTING_KEY = "order.accepted";
   public static final String DELIVERY_PICKED_UP_ROUTING_KEY = "delivery.picked_up";
   public static final String DELIVERY_COMPLETED_ROUTING_KEY = "delivery.completed";
+  public static final String PAYMENT_APPROVED_ROUTING_KEY = "payment.approved";   // 사장님 새 주문 (#217)
 
   public static final String ORDER_ACCEPTED_SMS_QUEUE = "member.sms.order-accepted";
   public static final String DELIVERY_PICKED_UP_SMS_QUEUE = "member.sms.delivery-picked-up";
   public static final String DELIVERY_COMPLETED_SMS_QUEUE = "member.sms.delivery-completed";
+  public static final String PAYMENT_APPROVED_SMS_QUEUE = "member.sms.payment-approved";
 
   // 문자 리스너 전용 설정 이름 (@RabbitListener(containerFactory = ...) 에서 씀)
   public static final String SMS_LISTENER_FACTORY = "smsListenerContainerFactory";
@@ -59,6 +61,11 @@ public class RabbitConfig {
   @Bean
   Declarables deliveryCompletedSmsQueues() {
     return smsQueues(DELIVERY_COMPLETED_SMS_QUEUE, DELIVERY_COMPLETED_ROUTING_KEY);
+  }
+
+  @Bean
+  Declarables paymentApprovedSmsQueues() {
+    return smsQueues(PAYMENT_APPROVED_SMS_QUEUE, PAYMENT_APPROVED_ROUTING_KEY);
   }
 
   // 문자 큐 + DLQ (둘 다 quorum). 재전달은 deliveryLimit 3 까지, 포기한 메시지는 member.dlx → <큐>.dlq. DLQ 에는 리스너를 붙이지 않는다

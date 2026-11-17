@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 주문 · 배달 알림 문자 (#182). 휴대폰 인증한 고객에게만, 이벤트당 1통.
+ * 주문 · 배달 알림 문자 (#182 고객, #217 사장님 새 주문). 휴대폰 인증한 회원에게만, 이벤트당 1통.
  * 문자 실패(503)는 예외를 그대로 던져 재시도 → 3번 실패하면 DLQ. 재시도해도 소용없는 경우는 로그만 남기고 끝낸다.
  */
 @Slf4j
@@ -27,23 +27,24 @@ public class SmsNotificationService {
   private final SmsLogWriter smsLogWriter;
   private final SmsSender smsSender;
 
-  public void send(UUID eventId, String eventType, Long customerId, String message) {
+  /** memberId: 받는 회원 (고객 문자는 customerId, 사장님 문자는 ownerId) */
+  public void send(UUID eventId, String eventType, Long memberId, String message) {
     // ① 스위치 (월 한도 1달러 — 필요하면 SMS_NOTIFICATION_ENABLED=false)
     if (!props.notificationEnabled()) {
       return;
     }
-    if (customerId == null) {
-      throw new AmqpRejectAndDontRequeueException(eventType + " without customerId eventId=" + eventId);
+    if (memberId == null) {
+      throw new AmqpRejectAndDontRequeueException(eventType + " without memberId eventId=" + eventId);
     }
 
-    // ② 휴대폰 인증한 고객만. 번호는 이벤트가 아니라 member DB 의 값 (인증한 번호)
-    Member member = memberRepository.findById(customerId).orElse(null);
+    // ② 휴대폰 인증한 회원만. 번호는 이벤트가 아니라 member DB 의 값 (인증한 번호)
+    Member member = memberRepository.findById(memberId).orElse(null);
     if (member == null || !member.isPhoneVerified()) {
       return;
     }
 
     // ③ 이미 보낸 이벤트면 건너뜀 (재전달 · 재시도)
-    if (!smsLogWriter.claim(eventId, eventType, customerId)) {
+    if (!smsLogWriter.claim(eventId, eventType, memberId)) {
       log.info("이미 보낸 알림 문자 건너뜀 eventId={}, type={}", eventId, eventType);
       return;
     }
