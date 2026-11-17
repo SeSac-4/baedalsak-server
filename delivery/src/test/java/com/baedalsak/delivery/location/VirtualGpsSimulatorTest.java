@@ -78,7 +78,7 @@ class VirtualGpsSimulatorTest {
     }
 
     @Test
-    void clearsDeliveryThatIsNoLongerPickedUp() {
+    void clearsDeliveryThatIsNoLongerActive() {
         Delivery delivered = delivery(1L, DeliveryStatus.DELIVERED);
         when(store.activeSimulations()).thenReturn(Set.of(1L));
         when(repository.findAllById(Set.of(1L))).thenReturn(List.of(delivered));
@@ -108,14 +108,50 @@ class VirtualGpsSimulatorTest {
         Instant pickedUpAt = NOW.minusSeconds(3);
         ReflectionTestUtils.setField(delivery, "pickedUpAt", OffsetDateTime.ofInstant(pickedUpAt, ZoneId.of("Asia/Seoul")));
         when(repository.findById(1L)).thenReturn(Optional.of(delivery));
-        when(store.startSimulation(1L, pickedUpAt)).thenReturn(true);
-        when(store.findSimulationStart(1L)).thenReturn(Optional.of(pickedUpAt));
+        SimulationStart start = new SimulationStart(RouteLeg.TO_CUSTOMER, pickedUpAt);
+        when(store.startSimulation(1L, start)).thenReturn(true);
+        when(store.findSimulationStart(1L)).thenReturn(Optional.of(start));
         when(reportService.routeOf(delivery)).thenReturn(Optional.of(ROUTE));
 
         simulator(DeliveryGpsProperties.Mode.VIRTUAL).start(1L);
 
-        verify(store).startSimulation(1L, pickedUpAt);
+        verify(store).startSimulation(1L, start);
         verify(reportService).report(eq(delivery), eq(ROUTE), any(), eq(LocationSource.VIRTUAL), any());
+    }
+
+    @Test
+    void assignedRiderMovesTowardStoreFromAssignTime() {
+        Delivery delivery = delivery(1L, DeliveryStatus.ASSIGNED);
+        Instant assignedAt = NOW.minusSeconds(4);
+        ReflectionTestUtils.setField(delivery, "assignedAt", OffsetDateTime.ofInstant(assignedAt, ZoneId.of("Asia/Seoul")));
+        SimulationStart start = new SimulationStart(RouteLeg.TO_STORE, assignedAt);
+        when(repository.findById(1L)).thenReturn(Optional.of(delivery));
+        when(store.startSimulation(1L, start)).thenReturn(true);
+        when(store.findSimulationStart(1L)).thenReturn(Optional.of(start));
+        when(reportService.routeOf(delivery)).thenReturn(Optional.of(ROUTE));
+
+        simulator(DeliveryGpsProperties.Mode.VIRTUAL).start(1L);
+
+        // 4초 × 5m/s = 20m 이동
+        assertThat(RouteGeometry.distanceM(STORE, reportedPoint(delivery))).isCloseTo(20, within(0.5));
+    }
+
+    @Test
+    void switchesToCustomerLegWhenPickedUpButStillOnStoreLeg() {
+        Delivery delivery = delivery(1L, DeliveryStatus.PICKED_UP);
+        Instant pickedUpAt = NOW.minusSeconds(2);
+        ReflectionTestUtils.setField(delivery, "pickedUpAt", OffsetDateTime.ofInstant(pickedUpAt, ZoneId.of("Asia/Seoul")));
+        when(store.activeSimulations()).thenReturn(Set.of(1L));
+        when(repository.findAllById(Set.of(1L))).thenReturn(List.of(delivery));
+        when(store.findSimulationStart(1L))
+                .thenReturn(Optional.of(new SimulationStart(RouteLeg.TO_STORE, NOW.minusSeconds(300))));
+        when(reportService.routeOf(delivery)).thenReturn(Optional.of(ROUTE));
+
+        simulator(DeliveryGpsProperties.Mode.VIRTUAL).tick();
+
+        // 가게까지 구간 시작 시각(300초 전)이 아니라 픽업 시각(2초 전)부터 계산 → 10m
+        verify(store).startSimulation(1L, new SimulationStart(RouteLeg.TO_CUSTOMER, pickedUpAt));
+        assertThat(RouteGeometry.distanceM(STORE, reportedPoint(delivery))).isCloseTo(10, within(0.5));
     }
 
     @Test
@@ -132,7 +168,8 @@ class VirtualGpsSimulatorTest {
     private void givenRunning(Delivery delivery, Instant startedAt) {
         when(store.activeSimulations()).thenReturn(Set.of(delivery.getId()));
         when(repository.findAllById(Set.of(delivery.getId()))).thenReturn(List.of(delivery));
-        when(store.findSimulationStart(delivery.getId())).thenReturn(Optional.of(startedAt));
+        when(store.findSimulationStart(delivery.getId()))
+                .thenReturn(Optional.of(new SimulationStart(RouteLeg.of(delivery.getStatus()), startedAt)));
         when(reportService.routeOf(delivery)).thenReturn(Optional.of(ROUTE));
     }
 

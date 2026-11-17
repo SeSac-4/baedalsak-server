@@ -28,6 +28,9 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
     Page<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status, Pageable pageable);
 
+    // 좌표가 있는 가장 오래된 배차 대기 배달 (라이더 가상 위치 기준점). delivery_waiting_idx 사용
+    Optional<Delivery> findFirstByStatusAndPickupLatIsNotNullOrderByCreatedAtAscIdAsc(DeliveryStatus status);
+
     // 라이더의 진행 중 배달 여부 (6.2.2 동시 1건만). delivery_rider_active_uq (rider_id) WHERE status IN (...) 사용
     boolean existsByRiderIdAndStatusIn(Long riderId, Collection<DeliveryStatus> statuses);
 
