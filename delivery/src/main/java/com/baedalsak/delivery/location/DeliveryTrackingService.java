@@ -48,15 +48,23 @@ public class DeliveryTrackingService {
     /**
      * @param orderId  주문 ID
      * @param memberId 요청자
-     * @return 상태 + 위치. 배달이 없으면 빈 값 → 204. 위치는 진행 중(배차 완료 · 픽업)일 때만 싣는다
+     * @return 상태 + 위치. 배달이 없으면 빈 값 → 204. 위치는 진행 중(배차 완료 · 픽업)일 때만,
+     * 지금 구간의 위치만 싣는다 (픽업 직후 아직 가게까지 구간 위치가 남아 있으면 싣지 않음)
      */
     @Transactional(readOnly = true)
     public Optional<DeliveryLocationResponse> getLocation(Long orderId, Long memberId) {
         return findAuthorized(orderId, memberId)
-                .map(delivery -> DeliveryLocationResponse.of(delivery,
-                        DeliveryStatus.ACTIVE.contains(delivery.getStatus())
-                                ? riderLocationStore.find(delivery.getId()).orElse(null)
-                                : null));
+                .map(delivery -> DeliveryLocationResponse.of(delivery, currentLegLocation(delivery)));
+    }
+
+    private RiderLocation currentLegLocation(Delivery delivery) {
+        if (!DeliveryStatus.ACTIVE.contains(delivery.getStatus())) {
+            return null;
+        }
+        RouteLeg leg = RouteLeg.of(delivery.getStatus());
+        return riderLocationStore.find(delivery.getId())
+                .filter(location -> RouteLeg.orDefault(location.leg()) == leg)
+                .orElse(null);
     }
 
     // 403: 주문 고객 · 가게 사장님 · 배정된 라이더가 아님. 한 계정은 한 역할만 가지므로 셋 중 하나와 맞으면 허용

@@ -45,6 +45,7 @@ class LocationReportServiceTest {
     private final DeliveryRouteService routeService = mock(DeliveryRouteService.class);
     private final ApproachRouteService approachRouteService = mock(ApproachRouteService.class);
     private final RiderLocationStore store = mock(RiderLocationStore.class);
+    private final RiderPositionService positionService = mock(RiderPositionService.class);
     private LocationReportService service;
 
     @BeforeEach
@@ -52,7 +53,7 @@ class LocationReportServiceTest {
         // 도보 3.6km/h = 1m/s, 자전거 9km/h = 2.5m/s, 오토바이 18km/h = 5m/s, 도착 반경 30m
         DeliveryGpsProperties gps = new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL,
                 Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30, Duration.ofMinutes(30));
-        service = new LocationReportService(repository, routeService, approachRouteService, store, gps,
+        service = new LocationReportService(repository, routeService, approachRouteService, store, positionService, gps,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
         when(store.find(anyLong())).thenReturn(Optional.empty());
     }
@@ -204,6 +205,28 @@ class LocationReportServiceTest {
 
         assertThat(location.leg()).isEqualTo(RouteLeg.TO_STORE);
         verify(store).stopSimulation(1L);
+    }
+
+    @Test
+    void storeArrivalDoesNotCarryOverToCustomerLeg() {
+        // 가게까지 구간에서 도착한 위치가 남아 있어도 픽업 후(배달지까지)에는 새로 계산한다
+        when(store.find(1L)).thenReturn(Optional.of(new RiderLocation(STORE.lat(), STORE.lng(), 0, now(),
+                true, now(), now(), LocationSource.VIRTUAL, RouteLeg.TO_STORE)));
+
+        RiderLocation location = service.report(delivery(1L, DeliveryStatus.PICKED_UP), ROUTE, STORE,
+                LocationSource.VIRTUAL, 0.0);
+
+        assertThat(location.leg()).isEqualTo(RouteLeg.TO_CUSTOMER);
+        assertThat(location.arrived()).isFalse();
+        assertThat(location.arrivedAt()).isNull();
+    }
+
+    @Test
+    void movesRiderPositionWithReportedPoint() {
+        service.report(delivery(1L, DeliveryStatus.PICKED_UP), ROUTE, HOME, LocationSource.VIRTUAL, 222.0);
+
+        // 배달지에 닿은 위치가 라이더 위치로 남아 다음 배차의 출발점이 된다
+        verify(positionService).moveTo(RIDER_ID, HOME);
     }
 
     @Test

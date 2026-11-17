@@ -98,13 +98,25 @@ class DeliveryTrackingServiceTest {
         GeoPoint rider = new GeoPoint(STORE.lat() + 0.002, STORE.lng());
         when(repository.findByOrderId(1042L)).thenReturn(Optional.of(delivery));
         when(approachRouteService.readRoute(delivery)).thenReturn(Optional.of(new Route(List.of(rider, STORE), 222, 44, false)));
-        when(store.find(1L)).thenReturn(Optional.of(LOCATION));
+        RiderLocation toStore = new RiderLocation(rider.lat(), rider.lng(), 222, OffsetDateTime.now(), false, null,
+                OffsetDateTime.now(), LocationSource.VIRTUAL, RouteLeg.TO_STORE);
+        when(store.find(1L)).thenReturn(Optional.of(toStore));
 
         DeliveryRouteResponse route = service.getRoute(1042L, TestDeliveries.CUSTOMER_ID).orElseThrow();
         assertThat(route.leg()).isEqualTo(RouteLeg.TO_STORE);
         assertThat(route.path()).containsExactly(rider, STORE);
-        assertThat(service.getLocation(1042L, TestDeliveries.CUSTOMER_ID).orElseThrow().location()).isEqualTo(LOCATION);
+        assertThat(service.getLocation(1042L, TestDeliveries.CUSTOMER_ID).orElseThrow().location()).isEqualTo(toStore);
         verify(routeService, never()).readRoute(any());
+    }
+
+    @Test
+    void hidesStoreLegLocationRightAfterPickup() {
+        when(repository.findByOrderId(1042L)).thenReturn(Optional.of(delivery(1L, DeliveryStatus.PICKED_UP)));
+        when(store.find(1L)).thenReturn(Optional.of(new RiderLocation(STORE.lat(), STORE.lng(), 0,
+                OffsetDateTime.now(), true, OffsetDateTime.now(), OffsetDateTime.now(), LocationSource.VIRTUAL,
+                RouteLeg.TO_STORE)));
+
+        assertThat(service.getLocation(1042L, TestDeliveries.CUSTOMER_ID).orElseThrow().location()).isNull();
     }
 
     @Test

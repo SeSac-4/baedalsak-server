@@ -31,16 +31,19 @@ public class LocationReportService {
     private final DeliveryRouteService deliveryRouteService;
     private final ApproachRouteService approachRouteService;
     private final RiderLocationStore riderLocationStore;
+    private final RiderPositionService riderPositionService;
     private final DeliveryGpsProperties properties;
     private final Clock clock;
 
     public LocationReportService(DeliveryRepository deliveryRepository, DeliveryRouteService deliveryRouteService,
                                  ApproachRouteService approachRouteService, RiderLocationStore riderLocationStore,
-                                 DeliveryGpsProperties properties, Clock clock) {
+                                 RiderPositionService riderPositionService, DeliveryGpsProperties properties,
+                                 Clock clock) {
         this.deliveryRepository = deliveryRepository;
         this.deliveryRouteService = deliveryRouteService;
         this.approachRouteService = approachRouteService;
         this.riderLocationStore = riderLocationStore;
+        this.riderPositionService = riderPositionService;
         this.properties = properties;
         this.clock = clock;
     }
@@ -94,7 +97,9 @@ public class LocationReportService {
                                 Double travelledM) {
         OffsetDateTime now = OffsetDateTime.now(clock);
         RouteLeg leg = RouteLeg.of(delivery.getStatus());
-        Optional<RiderLocation> previous = riderLocationStore.find(delivery.getId());
+        // 이전 구간(가게까지)의 도착 · 남은 거리는 새 구간(배달지까지)에 이어 쓰지 않는다
+        Optional<RiderLocation> previous = riderLocationStore.find(delivery.getId())
+                .filter(found -> RouteLeg.orDefault(found.leg()) == leg);
 
         Integer remaining = route == null ? null
                 : (int) Math.round(remainingM(route, point, travelledM, previous.orElse(null)));
@@ -112,6 +117,10 @@ public class LocationReportService {
         RiderLocation location = new RiderLocation(point.lat(), point.lng(), remaining, eta,
                 arrived, arrivedAt, now, source, leg);
         riderLocationStore.save(delivery.getId(), location);
+        // 라이더 위치도 같이 옮긴다 → 배달을 마치면 배달지에 남아 다음 배차가 그 자리에서 출발한다
+        if (delivery.getRiderId() != null) {
+            riderPositionService.moveTo(delivery.getRiderId(), point);
+        }
         return location;
     }
 
