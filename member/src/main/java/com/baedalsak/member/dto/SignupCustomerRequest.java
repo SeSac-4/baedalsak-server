@@ -2,6 +2,7 @@ package com.baedalsak.member.dto;
 
 import com.baedalsak.common.logging.MaskingUtils;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -35,7 +36,11 @@ public record SignupCustomerRequest(
 
     // 이메일 인증 완료 표 (#207, POST /auth/email/verify 응답). 필수 — 없으면 400 (부하 테스트 날 스위치를 끄면 없어도 가입)
     @Size(max = 100)
-    String emailVerificationToken
+    String emailVerificationToken,
+
+    // 배달 주소 (#215). 선택 — 넣으면 첫 주소 = 기본 주소. 고객 가입에만 있음
+    @Valid
+    AddressRequest address
 
 ) implements SignupRequest {
 
@@ -45,6 +50,7 @@ public record SignupCustomerRequest(
     return "SignupCustomerRequest[email=" + email + ", password=****, name=" + name
         + ", phone=" + MaskingUtils.maskPhone(phone)
         + ", phoneVerificationToken=" + (phoneVerificationToken == null ? null : "****")
-        + ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****") + "]";
+        + ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****")
+        + ", address=" + (address == null ? null : "****") + "]";
   }
 }
