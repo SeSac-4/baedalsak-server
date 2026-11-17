@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.Random;
 import java.util.random.RandomGenerator;
 
 /**
@@ -33,7 +34,9 @@ public class RiderPositionService {
     @Autowired
     public RiderPositionService(RiderLocationStore riderLocationStore, DeliveryRepository deliveryRepository,
                                 DeliveryGpsProperties properties) {
-        this(riderLocationStore, deliveryRepository, properties, RandomGenerator.getDefault());
+        // RandomGenerator.getDefault() 는 운영 이미지에서 기본 알고리즘(L32X64MixRandom)을 못 찾아 시작이 실패한다.
+        // java.util.Random 은 java.base 에 있어 런타임 구성과 관계없이 쓸 수 있다
+        this(riderLocationStore, deliveryRepository, properties, new Random());
     }
 
     RiderPositionService(RiderLocationStore riderLocationStore, DeliveryRepository deliveryRepository,
