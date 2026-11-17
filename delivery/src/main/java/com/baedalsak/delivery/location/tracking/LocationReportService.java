@@ -3,8 +3,9 @@ package com.baedalsak.delivery.location.tracking;
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.domain.VehicleType;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.delivery.error.DeliveryErrorCode;
 import com.baedalsak.delivery.location.config.DeliveryGpsProperties;
 import com.baedalsak.delivery.location.geo.GeoPoint;
 import com.baedalsak.delivery.location.geo.Route;
@@ -66,12 +67,12 @@ public class LocationReportService {
      */
     public RiderLocation reportReal(Long deliveryId, Long riderId, GeoPoint point) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DELIVERY_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
         if (!Objects.equals(delivery.getRiderId(), riderId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "본인에게 배정된 배달만 위치를 보낼 수 있습니다.");
+            throw new BusinessException(CommonErrorCode.FORBIDDEN, "본인에게 배정된 배달만 위치를 보낼 수 있습니다.");
         }
         if (!DeliveryStatus.ACTIVE.contains(delivery.getStatus())) {
-            throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS);
         }
         riderLocationStore.stopSimulation(deliveryId);
         return report(delivery, routeOf(delivery).orElse(null), point, LocationSource.REAL);

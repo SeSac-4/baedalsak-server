@@ -1,7 +1,7 @@
 package com.baedalsak.delivery.controller;
 
-import com.baedalsak.delivery.auth.CurrentMember;
-import com.baedalsak.delivery.auth.LoginMember;
+import com.baedalsak.common.auth.CurrentMember;
+import com.baedalsak.common.auth.LoginMember;
 import com.baedalsak.delivery.dto.DeliveryLocationResponse;
 import com.baedalsak.delivery.dto.DeliveryRouteResponse;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;

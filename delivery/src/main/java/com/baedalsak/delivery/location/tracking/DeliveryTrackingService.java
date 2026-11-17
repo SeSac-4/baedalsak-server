@@ -4,8 +4,8 @@ import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.dto.DeliveryLocationResponse;
 import com.baedalsak.delivery.dto.DeliveryRouteResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.delivery.location.geo.Route;
 import com.baedalsak.delivery.location.geo.RouteLeg;
 import com.baedalsak.delivery.location.route.ApproachRouteService;
@@ -77,7 +77,7 @@ public class DeliveryTrackingService {
                 .map(delivery -> {
                     if (!memberId.equals(delivery.getCustomerId()) && !memberId.equals(delivery.getOwnerId())
                             && !memberId.equals(delivery.getRiderId())) {
-                        throw new BusinessException(ErrorCode.FORBIDDEN, "본인 주문 · 내 가게 주문 · 내 배달만 조회할 수 있습니다.");
+                        throw new BusinessException(CommonErrorCode.FORBIDDEN, "본인 주문 · 내 가게 주문 · 내 배달만 조회할 수 있습니다.");
                     }
                     return delivery;
                 });

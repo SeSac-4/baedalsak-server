@@ -1,7 +1,7 @@
 package com.baedalsak.delivery.dto;
 
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 
 import java.util.Locale;
 
@@ -26,7 +26,7 @@ public enum WaitingSort {
         try {
             return valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "sort 는 FASTEST · FEE 중 하나여야 합니다.");
+            throw new BusinessException(CommonErrorCode.VALIDATION_FAILED, "sort 는 FASTEST · FEE 중 하나여야 합니다.");
         }
     }
 }

@@ -3,8 +3,9 @@ package com.baedalsak.delivery.location.tracking;
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.domain.VehicleType;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.delivery.error.DeliveryErrorCode;
 import com.baedalsak.delivery.location.config.DeliveryGpsProperties;
 import com.baedalsak.delivery.location.geo.GeoPoint;
 import com.baedalsak.delivery.location.geo.Route;
@@ -166,7 +167,7 @@ class LocationReportServiceTest {
 
         assertThatThrownBy(() -> service.reportReal(1L, 777L, STORE))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+                        e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
         verify(store, never()).save(anyLong(), any());
     }
 
@@ -176,7 +177,7 @@ class LocationReportServiceTest {
 
         assertThatThrownBy(() -> service.reportReal(1L, RIDER_ID, STORE))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DELIVERY_INVALID_STATUS));
+                        e -> assertThat(e.getErrorCode()).isEqualTo(DeliveryErrorCode.DELIVERY_INVALID_STATUS));
     }
 
     @Test
@@ -242,7 +243,7 @@ class LocationReportServiceTest {
 
         assertThatThrownBy(() -> service.reportReal(1L, RIDER_ID, STORE))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DELIVERY_NOT_FOUND));
+                        e -> assertThat(e.getErrorCode()).isEqualTo(DeliveryErrorCode.DELIVERY_NOT_FOUND));
     }
 
     @Test

@@ -2,8 +2,8 @@ package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ public class DeliveryDetailService {
                 .map(delivery -> {
                     // 한 계정은 한 역할만 가지므로(설계서 '공통 규칙') 역할을 따로 보지 않고 둘 중 하나와 맞으면 허용
                     if (!memberId.equals(delivery.getCustomerId()) && !memberId.equals(delivery.getOwnerId())) {
-                        throw new BusinessException(ErrorCode.FORBIDDEN, "본인 주문 또는 내 가게 주문의 배달만 조회할 수 있습니다.");
+                        throw new BusinessException(CommonErrorCode.FORBIDDEN, "본인 주문 또는 내 가게 주문의 배달만 조회할 수 있습니다.");
                     }
                     return DeliveryStatusResponse.from(delivery);
                 });

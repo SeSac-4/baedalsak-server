@@ -42,7 +42,9 @@ public class GlobalExceptionHandler {
     } else {
       log.warn("업무 예외 code={} status={} fields={}", code.name(), code.getStatus(), fields);
     }
-    return build(code, e.getErrors());
+    // 메시지는 예외의 것을 쓴다. 상황별 문구가 없으면 코드 기본 문구와 같다
+    String traceId = MDC.get("traceId");
+    return ResponseEntity.status(code.getStatus()).body(ErrorResponse.of(code, e.getMessage(), e.getErrors(), traceId));
   }
 
   //@Valid검증실패: 어떤 필드가 틀렸는지 errors에 담기
