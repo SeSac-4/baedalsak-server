@@ -11,8 +11,10 @@ import com.baedalsak.delivery.dto.RiderDeliveryHistoryResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.location.DeliveryTrackingService;
+import com.baedalsak.delivery.location.GeoPoint;
 import com.baedalsak.delivery.location.LocationReportService;
 import com.baedalsak.delivery.location.RiderLocation;
+import com.baedalsak.delivery.location.RiderPositionService;
 import com.baedalsak.delivery.service.DeliveryAcceptService;
 import com.baedalsak.delivery.service.DeliveryActiveService;
 import com.baedalsak.delivery.service.DeliveryCompleteService;
@@ -56,6 +58,7 @@ public class DeliveryController {
     private final DeliveryHistoryService deliveryHistoryService;
     private final DeliveryTrackingService deliveryTrackingService;
     private final LocationReportService locationReportService;
+    private final RiderPositionService riderPositionService;
 
     // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순 (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
     @GetMapping("/waiting")
@@ -107,6 +110,14 @@ public class DeliveryController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @CurrentMember LoginMember rider) {
         return deliveryHistoryService.getHistory(rider.id(), from, to);
+    }
+
+    // 내 현재 위치 (라이더). 배차 대기 지도용. 처음 보면 가장 오래 기다린 배차 대기 가게 바로 주변에 둔다. 둘 곳이 없으면 204
+    @GetMapping("/me/position")
+    public ResponseEntity<GeoPoint> getMyPosition(@CurrentMember LoginMember rider) {
+        return riderPositionService.myPosition(rider.id())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 시 한 번. 픽업 전이면 204

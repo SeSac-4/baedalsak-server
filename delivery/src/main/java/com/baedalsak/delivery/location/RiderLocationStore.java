@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
  *   <li>{@code delivery:location:{id}} — 라이더 위치 JSON (RiderLocation). 쓸 때마다 TTL 갱신</li>
  *   <li>{@code delivery:sim:{id}} — 가상 GPS 시작 시각(epoch ms). 파드가 다시 떠도 경과 시간으로 이어서 움직인다</li>
  *   <li>{@code delivery:sim:active} — 가상 GPS 가 돌고 있는 배달 ID 집합</li>
+ *   <li>{@code delivery:rider-position:{riderId}} — 라이더 현재 위치 (배달과 무관하게 라이더별, 배차 전 지도 표시용)</li>
  * </ul>
  * Redis 장애가 배달 API 로 번지지 않도록 모든 메서드는 예외를 던지지 않는다 (실패 시 빈 값 · false).
  * 접속이 안 되면 경고를 한 번만 남기고 {@link #RETRY_AFTER} 동안 Redis 를 부르지 않는다
@@ -32,6 +33,8 @@ public class RiderLocationStore {
     static final String ACTIVE_SIMULATIONS_KEY = "delivery:sim:active";
     /** 접속 실패 후 다시 시도하기까지 쉬는 시간 */
     static final Duration RETRY_AFTER = Duration.ofSeconds(30);
+    /** 라이더 위치 키 수명. 이 시간 동안 움직임이 없으면 다음에 볼 때 가게 주변에 새로 둔다 */
+    static final Duration RIDER_POSITION_TTL = Duration.ofHours(6);
 
     private final StringRedisTemplate redis;
     private final JsonMapper jsonMapper;
@@ -54,6 +57,55 @@ public class RiderLocationStore {
 
     static String simulationKey(Long deliveryId) {
         return "delivery:sim:" + deliveryId;
+    }
+
+    static String riderPositionKey(Long riderId) {
+        return "delivery:rider-position:" + riderId;
+    }
+
+    /**
+     * @param riderId 라이더 ID
+     * @return 라이더 현재 위치. 없거나 Redis 실패면 빈 값
+     */
+    public Optional<GeoPoint> findRiderPosition(Long riderId) {
+        return call("rider position read", null, () -> {
+            String json = redis.opsForValue().get(riderPositionKey(riderId));
+            return json == null ? Optional.<GeoPoint>empty() : Optional.of(jsonMapper.readValue(json, GeoPoint.class));
+        }, Optional.empty());
+    }
+
+    /**
+     * 라이더 위치가 없을 때만 저장하고, 저장돼 있는 값을 돌려준다 (SET NX). 동시에 불려도 위치는 하나로 정해진다.
+     *
+     * @param riderId   라이더 ID
+     * @param candidate 없을 때 둘 위치
+     * @return 저장된 위치. Redis 실패면 빈 값
+     */
+    public Optional<GeoPoint> placeRiderPositionIfAbsent(Long riderId, GeoPoint candidate) {
+        return call("rider position place", null, () -> {
+            String key = riderPositionKey(riderId);
+            Boolean placed = redis.opsForValue().setIfAbsent(key, jsonMapper.writeValueAsString(candidate),
+                    RIDER_POSITION_TTL);
+            if (Boolean.TRUE.equals(placed)) {
+                return Optional.of(candidate);
+            }
+            String json = redis.opsForValue().get(key);
+            return Optional.of(json == null ? candidate : jsonMapper.readValue(json, GeoPoint.class));
+        }, Optional.empty());
+    }
+
+    /**
+     * 라이더 위치를 덮어쓰고 TTL 을 다시 건다.
+     *
+     * @param riderId 라이더 ID
+     * @param point   위치
+     */
+    public void saveRiderPosition(Long riderId, GeoPoint point) {
+        call("rider position save", null, () -> {
+            redis.opsForValue().set(riderPositionKey(riderId), jsonMapper.writeValueAsString(point),
+                    RIDER_POSITION_TTL);
+            return null;
+        }, null);
     }
 
     /**

@@ -112,6 +112,19 @@ class RiderLocationStoreTest {
         verify(sets, times(2)).members(RiderLocationStore.ACTIVE_SIMULATIONS_KEY);
     }
 
+    @Test
+    void placesRiderPositionOnlyOnceAndReturnsStoredValue() {
+        when(redis.opsForValue()).thenReturn(values);
+        GeoPoint first = new GeoPoint(37.5, 127.0);
+        when(values.setIfAbsent(eq("delivery:rider-position:9"), anyString(), eq(RiderLocationStore.RIDER_POSITION_TTL)))
+                .thenReturn(false);
+        when(values.get("delivery:rider-position:9")).thenReturn("{\"lat\":37.5,\"lng\":127.0}");
+
+        // 이미 다른 요청이 둔 위치가 있으면 새 후보 대신 그 값을 쓴다
+        assertThat(store.placeRiderPositionIfAbsent(9L, new GeoPoint(37.6, 127.1))).contains(first);
+        assertThat(store.findRiderPosition(9L)).contains(first);
+    }
+
     /** 테스트에서 시간을 앞으로 돌리는 시계 */
     private static final class MutableClock extends Clock {
 
