@@ -220,6 +220,90 @@ class PhoneVerificationServiceTest {
     assertThat(member.isPhoneVerified()).isFalse();
   }
 
+  // ---------- 번호 변경 (#208) ----------
+
+  private static final String NEW_PHONE = "01098765432";
+
+  private void sendAllowed(String phone) {
+    when(store.tryStartCooldown(phone)).thenReturn(true);
+    when(store.incrementDaily(phone)).thenReturn(1L);
+  }
+
+  private static void assertPhoneFieldError(Throwable thrown) {
+    assertThat(thrown).isInstanceOfSatisfying(BusinessException.class, e -> {
+      assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_FAILED);
+      assertThat(e.getErrors()).extracting(FieldErrorDetail::field).containsExactly("phone");
+    });
+  }
+
+  @Test
+  void 번호_변경_코드는_새_번호로_보냄() {
+    sendAllowed(NEW_PHONE);
+
+    service().sendChangeCode(1L, "010-9876-5432");
+
+    verify(smsSender).send(eq(NEW_PHONE), anyString());
+    assertThat(member.getPhone()).isEqualTo("010-1234-5678");   // 코드만 보내고 번호는 아직 그대로
+  }
+
+  @Test
+  void 지금_번호와_같으면_400_phone_필드이고_문자_안_보냄() {
+    assertPhoneFieldError(catchThrown(() -> service().sendChangeCode(1L, "01012345678")));   // 하이픈 없어도 같은 번호
+    verify(store, never()).tryStartCooldown(anyString());
+    verify(smsSender, never()).send(anyString(), anyString());
+  }
+
+  @Test
+  void 번호_변경_코드가_맞으면_새_번호로_바꾸고_인증됨() {
+    when(store.findCode(NEW_PHONE)).thenReturn(Optional.of("123456"));
+
+    service().verifyChange(1L, "010-9876-5432", "123456");
+
+    assertThat(member.getPhone()).isEqualTo("010-9876-5432");
+    assertThat(member.isPhoneVerified()).isTrue();
+    verify(store).deleteCode(NEW_PHONE);
+  }
+
+  @Test
+  void 번호_변경_코드가_틀리면_번호와_인증_상태_그대로() {
+    member.markPhoneVerified();
+    when(store.findCode(NEW_PHONE)).thenReturn(Optional.of("123456"));
+    when(store.incrementFail(NEW_PHONE)).thenReturn(1L);
+
+    assertErrorCode(catchThrown(() -> service().verifyChange(1L, "010-9876-5432", "000000")),
+        CommonErrorCode.VALIDATION_FAILED);
+    assertThat(member.getPhone()).isEqualTo("010-1234-5678");
+    assertThat(member.isPhoneVerified()).isTrue();
+  }
+
+  @Test
+  void 번호_변경_확인도_지금_번호와_같으면_400() {
+    assertPhoneFieldError(catchThrown(() -> service().verifyChange(1L, "010-1234-5678", "123456")));
+    verify(store, never()).findCode(anyString());
+  }
+
+  @Test
+  void 스위치가_꺼져_있으면_인증_없이_바꾸고_미인증으로() {
+    member.markPhoneVerified();   // 예전 번호의 인증은 새 번호에 이어지지 않음
+
+    service(false).changeWithoutVerification(1L, "010-9876-5432");
+
+    assertThat(member.getPhone()).isEqualTo("010-9876-5432");
+    assertThat(member.isPhoneVerified()).isFalse();
+  }
+
+  @Test
+  void 스위치가_켜져_있으면_인증_없이_바꿀_수_없음_403() {
+    assertErrorCode(catchThrown(() -> service(true).changeWithoutVerification(1L, "010-9876-5432")),
+        MemberErrorCode.PHONE_CHANGE_VERIFICATION_REQUIRED);
+    assertThat(member.getPhone()).isEqualTo("010-1234-5678");
+  }
+
+  @Test
+  void 인증_없이_바꿀_때도_지금_번호와_같으면_400() {
+    assertPhoneFieldError(catchThrown(() -> service(false).changeWithoutVerification(1L, "010-1234-5678")));
+  }
+
   private static Throwable catchThrown(Runnable action) {
     return org.assertj.core.api.Assertions.catchThrowable(action::run);
   }
