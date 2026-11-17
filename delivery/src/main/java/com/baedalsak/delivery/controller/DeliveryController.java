@@ -10,6 +10,7 @@ import com.baedalsak.delivery.dto.PageResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryHistoryResponse;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
+import com.baedalsak.delivery.dto.WaitingSort;
 import com.baedalsak.delivery.location.DeliveryTrackingService;
 import com.baedalsak.delivery.location.GeoPoint;
 import com.baedalsak.delivery.location.LocationReportService;
@@ -60,11 +61,14 @@ public class DeliveryController {
     private final LocationReportService locationReportService;
     private final RiderPositionService riderPositionService;
 
-    // 6.2.1 배차 대기 목록 (라이더). status=WAITING, 오래된 순 (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
+    // 6.2.1 배차 대기 목록 (라이더). status=WAITING (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
+    // sort: OLDEST(기본, 오래된 순) · FASTEST(배달 완료까지 예상 시간 짧은 순) · FEE(배달비 높은 순). 모르는 값이면 400
     @GetMapping("/waiting")
     public PageResponse<WaitingDeliveryResponse> getWaiting(@RequestParam(defaultValue = "0") @Min(0) int page,
-                                                            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return deliveryWaitingService.getWaitingDeliveries(page, size);
+                                                            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+                                                            @RequestParam(required = false) String sort,
+                                                            @CurrentMember LoginMember rider) {
+        return deliveryWaitingService.getWaitingDeliveries(rider.id(), WaitingSort.parse(sort), page, size);
     }
 
     // 6.2.2 배차 수락 (라이더). WAITING → ASSIGNED. 먼저 처리된 1명만 성공, 나머지 409 DELIVERY_ALREADY_ASSIGNED
