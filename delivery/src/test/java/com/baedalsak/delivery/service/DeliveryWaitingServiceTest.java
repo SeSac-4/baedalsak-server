@@ -79,9 +79,9 @@ class DeliveryWaitingServiceTest {
 
     @Test
     void parsesSortIgnoringCaseAndRejectsUnknown() {
-        assertThat(WaitingSort.parse(null)).isEqualTo(WaitingSort.OLDEST);
-        assertThat(WaitingSort.parse("fastest")).isEqualTo(WaitingSort.FASTEST);
-        assertThatThrownBy(() -> WaitingSort.parse("CHEAPEST")).isInstanceOf(BusinessException.class);
+        assertThat(WaitingSort.parse(null)).isEqualTo(WaitingSort.FASTEST);
+        assertThat(WaitingSort.parse("fee")).isEqualTo(WaitingSort.FEE);
+        assertThatThrownBy(() -> WaitingSort.parse("OLDEST")).isInstanceOf(BusinessException.class);
     }
 
     // 배달 ID 별 합계 시간. 두 맵을 합쳐 쓰고, 없는 ID 는 null

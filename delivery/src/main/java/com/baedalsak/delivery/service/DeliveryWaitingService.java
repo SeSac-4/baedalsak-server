@@ -53,22 +53,21 @@ public class DeliveryWaitingService {
                 .map(MemberClient.RiderInfo::vehicleType)
                 .orElse(null);
 
-        if (sort == WaitingSort.FASTEST) {
-            List<WaitingDeliveryResponse> all = deliveryRepository
-                    .findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus.WAITING).stream()
+        if (sort == WaitingSort.FEE) {
+            PageRequest pageable = PageRequest.of(page, size);
+            Page<Delivery> deliveries = deliveryRepository.findAllByStatusOrderByDeliveryFeeDescCreatedAtAscIdAsc(
+                    DeliveryStatus.WAITING, pageable);
+            return PageResponse.of(deliveries, deliveries.stream()
                     .map(delivery -> toResponse(delivery, rider, vehicleType))
-                    .sorted(FASTEST_FIRST)
-                    .toList();
-            return PageResponse.slice(all, page, size);
+                    .toList());
         }
 
-        PageRequest pageable = PageRequest.of(page, size);
-        Page<Delivery> deliveries = sort == WaitingSort.FEE
-                ? deliveryRepository.findAllByStatusOrderByDeliveryFeeDescCreatedAtAscIdAsc(DeliveryStatus.WAITING, pageable)
-                : deliveryRepository.findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus.WAITING, pageable);
-        return PageResponse.of(deliveries, deliveries.stream()
+        List<WaitingDeliveryResponse> all = deliveryRepository
+                .findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus.WAITING).stream()
                 .map(delivery -> toResponse(delivery, rider, vehicleType))
-                .toList());
+                .sorted(FASTEST_FIRST)
+                .toList();
+        return PageResponse.slice(all, page, size);
     }
 
     private WaitingDeliveryResponse toResponse(Delivery delivery, GeoPoint rider, VehicleType vehicleType) {

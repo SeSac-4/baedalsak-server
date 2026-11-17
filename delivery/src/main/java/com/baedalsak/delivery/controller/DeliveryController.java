@@ -62,7 +62,7 @@ public class DeliveryController {
     private final RiderPositionService riderPositionService;
 
     // 6.2.1 배차 대기 목록 (라이더). status=WAITING (page 는 0부터, 기본 size 20·최대 100). 인증·역할 검사는 gateway 담당
-    // sort: OLDEST(기본, 오래된 순) · FASTEST(배달 완료까지 예상 시간 짧은 순) · FEE(배달비 높은 순). 모르는 값이면 400
+    // sort: FASTEST(기본, 배달 완료까지 예상 시간 짧은 순) · FEE(배달비 높은 순). 모르는 값이면 400
     @GetMapping("/waiting")
     public PageResponse<WaitingDeliveryResponse> getWaiting(@RequestParam(defaultValue = "0") @Min(0) int page,
                                                             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,

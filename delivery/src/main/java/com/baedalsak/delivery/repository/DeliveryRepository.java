@@ -25,9 +25,6 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     // 주문의 배달 (6.4.1). order_id UNIQUE 인덱스 사용
     Optional<Delivery> findByOrderId(Long orderId);
 
-    // 배차 대기 목록 (6.2.1, 오래된 순). delivery_waiting_idx (created_at) WHERE status='WAITING' 사용
-    Page<Delivery> findAllByStatusOrderByCreatedAtAscIdAsc(DeliveryStatus status, Pageable pageable);
-
     // 배차 대기 목록 배달비 높은 순. 같으면 오래된 순
     Page<Delivery> findAllByStatusOrderByDeliveryFeeDescCreatedAtAscIdAsc(DeliveryStatus status, Pageable pageable);
 
