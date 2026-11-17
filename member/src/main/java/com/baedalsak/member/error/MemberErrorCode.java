@@ -27,6 +27,9 @@ public enum MemberErrorCode implements ErrorCode {
     // 전화번호 변경 (#208). 휴대폰 인증 필수(sms.verification-required=true)일 때 인증 없이 바꾸려 하면
     PHONE_CHANGE_VERIFICATION_REQUIRED(403, "새 번호로 인증번호를 받아 확인해야 번호를 바꿀 수 있습니다."),
 
+    // 배달 주소록 (#215) — 고객당 3개까지
+    ADDRESS_LIMIT_EXCEEDED(409, "배달 주소는 3개까지 등록할 수 있습니다."),
+
     // 가입 전 이메일 인증 (#207) — 휴대폰과 같은 규칙
     EMAIL_CODE_COOLDOWN(429, "인증번호는 1분 뒤에 다시 받을 수 있습니다."),
     EMAIL_CODE_DAILY_LIMIT(429, "오늘은 이 이메일로 인증번호를 더 받을 수 없습니다. 내일 다시 시도해 주세요."),

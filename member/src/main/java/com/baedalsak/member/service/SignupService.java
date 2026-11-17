@@ -45,9 +45,15 @@ public class SignupService {
   private final AuthService authService;
   private final PhoneVerificationService phoneVerificationService;
   private final EmailVerificationService emailVerificationService;
+  private final MemberAddressService memberAddressService;
 
   public LoginResult signupCustomer(SignupCustomerRequest req) {
-    return signup(req, Role.CUSTOMER, memberId -> { });   // 고객은 프로필 없음
+    // 고객은 프로필 대신, 주소를 넣었으면 첫 주소(기본)로 저장 (#215). 가입 트랜잭션 안이라 Cognito 가 실패하면 함께 롤백
+    return signup(req, Role.CUSTOMER, memberId -> {
+      if (req.address() != null) {
+        memberAddressService.addSignupAddress(memberId, req.address());
+      }
+    });
   }
 
   public LoginResult signupOwner(SignupOwnerRequest req) {

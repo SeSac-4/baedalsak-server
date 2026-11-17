@@ -10,6 +10,7 @@ import com.baedalsak.member.auth.TokenBlacklistStore;
 import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.domain.Role;
 import com.baedalsak.member.error.MemberErrorCode;
+import com.baedalsak.member.repository.MemberAddressRepository;
 import com.baedalsak.member.repository.MemberRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class MemberWithdrawService {
   private final CognitoAuthClient cognitoAuthClient;
   private final TokenBlacklistStore tokenBlacklistStore;
   private final TransactionTemplate transactionTemplate;
+  private final MemberAddressRepository memberAddressRepository;
 
   /** tokenId · expiresAt: 지금 AT 의 jti · 만료 시각 (gateway 가 넘김, 없으면 블랙리스트 생략) */
   public void withdraw(long memberId, String tokenId, Long expiresAt) {
@@ -43,6 +45,7 @@ public class MemberWithdrawService {
         throw new BusinessException(MemberErrorCode.WITHDRAWAL_NOT_ALLOWED);
       }
       member.withdraw();   // 변경 감지로 커밋 때 UPDATE
+      memberAddressRepository.deleteByMemberId(memberId);   // 배달 주소도 지움 (#215, 개인정보)
     });
     log.info("회원 탈퇴 memberId={}", memberId);
 
