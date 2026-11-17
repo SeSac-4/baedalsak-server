@@ -1,7 +1,7 @@
 package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.domain.Delivery;
-import com.baedalsak.delivery.location.DeliveryCreatedEvent;
+import com.baedalsak.delivery.location.event.DeliveryCreatedEvent;
 import com.baedalsak.delivery.payload.OrderAcceptedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import com.baedalsak.delivery.repository.ProcessedEventRepository;

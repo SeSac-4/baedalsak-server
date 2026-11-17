@@ -2,7 +2,7 @@ package com.baedalsak.delivery.dto;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
-import com.baedalsak.delivery.location.RiderLocation;
+import com.baedalsak.delivery.location.tracking.RiderLocation;
 
 /**
  * GET /v1/deliveries/by-order/{orderId}/location 응답 (폴링용, 갱신 주기 2초).
