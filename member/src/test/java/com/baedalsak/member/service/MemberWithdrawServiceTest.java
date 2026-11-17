@@ -26,6 +26,7 @@ import com.baedalsak.member.auth.TokenBlacklistStore;
 import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.domain.Role;
 import com.baedalsak.member.error.MemberErrorCode;
+import com.baedalsak.member.repository.MemberAddressRepository;
 import com.baedalsak.member.repository.MemberRepository;
 
 /**
@@ -41,8 +42,9 @@ class MemberWithdrawServiceTest {
   private final CognitoAuthClient cognitoAuthClient = mock(CognitoAuthClient.class);
   private final TokenBlacklistStore tokenBlacklistStore = mock(TokenBlacklistStore.class);
   private final SignupServiceTest.FakeTransactionManager tx = new SignupServiceTest.FakeTransactionManager();
+  private final MemberAddressRepository memberAddressRepository = mock(MemberAddressRepository.class);
   private final MemberWithdrawService service = new MemberWithdrawService(
-      memberRepository, cognitoAuthClient, tokenBlacklistStore, new TransactionTemplate(tx));
+      memberRepository, cognitoAuthClient, tokenBlacklistStore, new TransactionTemplate(tx), memberAddressRepository);
 
   /** DB 에서 읽어 온 회원처럼 (id 는 DB 가 채우는 값이라 직접 넣음) */
   private Member saved(long id, Role role) {
@@ -74,6 +76,7 @@ class MemberWithdrawServiceTest {
     order.verify(cognitoAuthClient).globalSignOut(CUSTOMER_ID);   // 지우기 전에 전체 로그아웃
     order.verify(cognitoAuthClient).deleteUser(CUSTOMER_ID);
     order.verify(tokenBlacklistStore).add("jti-1", EXPIRES_AT);
+    verify(memberAddressRepository).deleteByMemberId(CUSTOMER_ID);   // 배달 주소도 지움 (#215)
   }
 
   @Test
@@ -90,6 +93,7 @@ class MemberWithdrawServiceTest {
     assertThat(rider.getDeletedAt()).isNull();
     assertThat(tx.rolledBack).isTrue();
     verifyNoInteractions(cognitoAuthClient, tokenBlacklistStore);
+    verify(memberAddressRepository, never()).deleteByMemberId(anyLong());
   }
 
   @Test
@@ -101,6 +105,7 @@ class MemberWithdrawServiceTest {
             e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.WITHDRAWAL_NOT_ALLOWED));
     assertThat(seed.getDeletedAt()).isNull();
     verifyNoInteractions(cognitoAuthClient);
+    verify(memberAddressRepository, never()).deleteByMemberId(anyLong());
   }
 
   @Test

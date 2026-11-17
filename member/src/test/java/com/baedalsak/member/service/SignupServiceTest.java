@@ -32,6 +32,7 @@ import com.baedalsak.member.auth.CognitoAuthClient;
 import com.baedalsak.member.auth.LoginResult;
 import com.baedalsak.member.domain.Member;
 import com.baedalsak.member.domain.Role;
+import com.baedalsak.member.dto.AddressRequest;
 import com.baedalsak.member.dto.LoginRequest;
 import com.baedalsak.member.dto.LoginResponse;
 import com.baedalsak.member.dto.SignupCustomerRequest;
@@ -59,6 +60,7 @@ class SignupServiceTest {
   @Mock AuthService authService;
   @Mock PhoneVerificationService phoneVerificationService;   // 기본: 표 없음 → false (미인증 가입)
   @Mock EmailVerificationService emailVerificationService;   // 기본: 아무것도 안 함 → 통과
+  @Mock MemberAddressService memberAddressService;
 
   private final FakeTransactionManager tx = new FakeTransactionManager();
   private SignupService signupService;
@@ -67,7 +69,7 @@ class SignupServiceTest {
   void setUp() {
     signupService = new SignupService(memberRepository, ownerProfileRepository, riderProfileRepository,
         cognitoAuthClient, new TransactionTemplate(tx), authService, phoneVerificationService,
-        emailVerificationService);
+        emailVerificationService, memberAddressService);
   }
 
   private SignupCustomerRequest customer() {
@@ -75,7 +77,11 @@ class SignupServiceTest {
   }
 
   private SignupCustomerRequest customer(String phoneVerificationToken) {
-    return new SignupCustomerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", phoneVerificationToken, null);
+    return customer(phoneVerificationToken, null);
+  }
+
+  private SignupCustomerRequest customer(String phoneVerificationToken, AddressRequest address) {
+    return new SignupCustomerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", phoneVerificationToken, null, address);
   }
 
   /** DB 가 INSERT 후 id 1000 을 돌려준 것처럼 */
@@ -97,6 +103,25 @@ class SignupServiceTest {
     verify(cognitoAuthClient).createUser(MEMBER_ID, EMAIL, PASSWORD, Role.CUSTOMER);   // username = member id
     assertThat(tx.committed).isTrue();
     verify(cognitoAuthClient, never()).deleteUser(anyLong());
+  }
+
+  @Test
+  void 고객_가입에_주소가_있으면_기본_주소로_저장() {
+    memberSavedWithId();
+    AddressRequest address = new AddressRequest("집", "서울 성동구 성수이로 77", "302호", "성수동2가", 37.5446, 127.0559, null);
+
+    signupService.signupCustomer(customer(null, address));
+
+    verify(memberAddressService).addSignupAddress(MEMBER_ID, address);
+  }
+
+  @Test
+  void 고객_가입에_주소가_없으면_주소_저장_안함() {
+    memberSavedWithId();
+
+    signupService.signupCustomer(customer());
+
+    verify(memberAddressService, never()).addSignupAddress(anyLong(), any());
   }
 
   @Test
