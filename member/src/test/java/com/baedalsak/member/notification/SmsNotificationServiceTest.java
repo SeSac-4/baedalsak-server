@@ -107,7 +107,7 @@ class SmsNotificationServiceTest {
   }
 
   @Test
-  void customerId_가_없으면_재시도_없이_DLQ() {
+  void memberId_가_없으면_재시도_없이_DLQ() {
     assertThatThrownBy(() -> service(true).send(EVENT_ID, TYPE, null, MESSAGE))
         .isInstanceOf(AmqpRejectAndDontRequeueException.class);
   }
@@ -119,5 +119,19 @@ class SmsNotificationServiceTest {
     assertThatThrownBy(() -> SmsNotificationService.parseEventId(TYPE, "abc"))
         .isInstanceOf(AmqpRejectAndDontRequeueException.class);
     assertThat(SmsNotificationService.parseEventId(TYPE, EVENT_ID.toString())).isEqualTo(EVENT_ID);
+  }
+
+  @Test
+  void 인증한_사장님이면_새_주문_문자를_보냄() {   // #217 — 받는 사람만 다르고 규칙은 같음
+    UUID eventId = UUID.randomUUID();
+    Member owner = new Member("owner@test.com", "사장님", "010-1000-0101", Role.OWNER);
+    owner.markPhoneVerified();
+    when(memberRepository.findById(101L)).thenReturn(Optional.of(owner));
+    when(smsLogWriter.claim(eventId, PaymentApprovedEvent.TYPE, 101L)).thenReturn(true);
+
+    service(true).send(eventId, PaymentApprovedEvent.TYPE, 101L, "[배달싹] 새 주문");
+
+    verify(smsSender).send("010-1000-0101", "[배달싹] 새 주문");
+    verify(smsLogWriter).markSent(eventId);
   }
 }
