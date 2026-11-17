@@ -6,7 +6,7 @@ import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.dto.PageResponse;
 import com.baedalsak.delivery.dto.WaitingDeliveryResponse;
 import com.baedalsak.delivery.dto.WaitingSort;
-import com.baedalsak.delivery.exception.BusinessException;
+import com.baedalsak.common.error.BusinessException;
 import com.baedalsak.delivery.location.route.DeliveryTimeEstimator;
 import com.baedalsak.delivery.location.tracking.RiderPositionService;
 import com.baedalsak.delivery.repository.DeliveryRepository;

@@ -3,8 +3,9 @@ package com.baedalsak.delivery.service;
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.dto.DeliveryStatusResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
+import com.baedalsak.delivery.error.DeliveryErrorCode;
 import com.baedalsak.delivery.location.event.DeliveryFinishedEvent;
 import com.baedalsak.delivery.payload.DeliveryCompletedEvent;
 import com.baedalsak.delivery.repository.DeliveryRepository;
@@ -59,11 +60,11 @@ public class DeliveryCompleteService {
     // 0행: 없는 배달(404) / 내 배달 아님(403) / PICKED_UP 이 아님(409, 픽업 전·이미 완료한 경우 포함)
     private BusinessException rejectReason(Long deliveryId, Long riderId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DELIVERY_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
         if (!Objects.equals(delivery.getRiderId(), riderId)) {
-            return new BusinessException(ErrorCode.FORBIDDEN, "본인에게 배정된 배달만 완료할 수 있습니다.");
+            return new BusinessException(CommonErrorCode.FORBIDDEN, "본인에게 배정된 배달만 완료할 수 있습니다.");
         }
         log.info("complete rejected by status: deliveryId={}, status={}", deliveryId, delivery.getStatus());
-        return new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
+        return new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS);
     }
 }

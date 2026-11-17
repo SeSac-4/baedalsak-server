@@ -2,8 +2,8 @@ package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.dto.RiderDeliveryHistoryResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -87,7 +87,7 @@ class DeliveryHistoryServiceTest {
     private void assertInvalid(LocalDate from, LocalDate to) {
         assertThatThrownBy(() -> service.getHistory(RIDER_ID, from, to))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+                        e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_FAILED));
         verify(repository, never()).findCompletedByRider(anyLong(), any(), any());
     }
 }

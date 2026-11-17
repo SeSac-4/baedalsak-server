@@ -4,8 +4,8 @@ import com.baedalsak.delivery.domain.Delivery;
 import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.dto.DeliveryLocationResponse;
 import com.baedalsak.delivery.dto.DeliveryRouteResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.delivery.location.TestDeliveries;
 import com.baedalsak.delivery.location.geo.GeoPoint;
 import com.baedalsak.delivery.location.geo.Route;
@@ -65,7 +65,7 @@ class DeliveryTrackingServiceTest {
 
         assertThatThrownBy(() -> service.getLocation(1042L, 777L))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+                        e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
     }
 
     @Test

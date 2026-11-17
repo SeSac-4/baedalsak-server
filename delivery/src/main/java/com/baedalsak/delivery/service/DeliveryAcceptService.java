@@ -6,8 +6,8 @@ import com.baedalsak.delivery.domain.DeliveryStatus;
 import com.baedalsak.delivery.domain.Outbox;
 import com.baedalsak.delivery.domain.VehicleType;
 import com.baedalsak.delivery.dto.RiderDeliveryResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.delivery.error.DeliveryErrorCode;
 import com.baedalsak.delivery.location.event.RiderAssignedEvent;
 import com.baedalsak.delivery.location.route.DeliveryGeocodeService;
 import com.baedalsak.delivery.payload.DeliveryAssignedEvent;
@@ -73,7 +73,7 @@ public class DeliveryAcceptService {
         // 라이더는 진행 중 배달을 동시에 1건만 (API 명세 6.2.2 비고). 순차 요청은 여기서 걸린다.
         // 잠금 없는 SELECT 라 동시 요청은 둘 다 통과할 수 있다 → 아래 UPDATE 에서 delivery_rider_active_uq 가 최종 보장
         if (deliveryRepository.existsByRiderIdAndStatusIn(riderId, DeliveryStatus.ACTIVE)) {
-            throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS);
         }
 
         int updated;
@@ -83,16 +83,16 @@ public class DeliveryAcceptService {
         } catch (DataIntegrityViolationException e) {
             // 같은 라이더의 다른 수락이 먼저 커밋됨. 트랜잭션이 aborted 라 추가 쿼리 없이 바로 던져 롤백한다
             log.info("rider already has active delivery: deliveryId={}, riderId={}", deliveryId, riderId);
-            throw new BusinessException(ErrorCode.DELIVERY_INVALID_STATUS);
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS);
         }
 
         if (updated == 0) {
             // 0행: 없는 배달이거나, 다른 라이더가 먼저 배정받음
             if (!deliveryRepository.existsById(deliveryId)) {
-                throw new BusinessException(ErrorCode.DELIVERY_NOT_FOUND);
+                throw new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND);
             }
             log.info("delivery already assigned: deliveryId={}, riderId={}", deliveryId, riderId);
-            throw new BusinessException(ErrorCode.DELIVERY_ALREADY_ASSIGNED);
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_ALREADY_ASSIGNED);
         }
 
         Delivery delivery = deliveryRepository.findById(deliveryId).orElseThrow();

@@ -24,4 +24,9 @@ public record ErrorResponse(
     public static ErrorResponse of(ErrorCode errorCode, List<FieldErrorDetail> errors, String traceId) {
         return new ErrorResponse(errorCode.name(), errorCode.getMessage(), errors, traceId);
     }
+
+    // 상황별 문구를 쓸 때 (BusinessException(code, message))
+    public static ErrorResponse of(ErrorCode errorCode, String message, List<FieldErrorDetail> errors, String traceId) {
+        return new ErrorResponse(errorCode.name(), message, errors, traceId);
+    }
 }

@@ -1,8 +1,8 @@
 package com.baedalsak.delivery.service;
 
 import com.baedalsak.delivery.dto.RiderDeliveryHistoryResponse;
-import com.baedalsak.delivery.exception.BusinessException;
-import com.baedalsak.delivery.exception.ErrorCode;
+import com.baedalsak.common.error.BusinessException;
+import com.baedalsak.common.error.CommonErrorCode;
 import com.baedalsak.delivery.repository.DeliveryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,7 @@ public class DeliveryHistoryService {
     @Transactional(readOnly = true)
     public List<RiderDeliveryHistoryResponse> getHistory(Long riderId, LocalDate from, LocalDate to) {
         if (from.isAfter(to) || ChronoUnit.DAYS.between(from, to) >= MAX_DAYS) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 기간은 " + MAX_DAYS + "일 이내로 선택해 주세요.");
+            throw new BusinessException(CommonErrorCode.VALIDATION_FAILED, "조회 기간은 " + MAX_DAYS + "일 이내로 선택해 주세요.");
         }
         return deliveryRepository
                 .findCompletedByRider(riderId,
