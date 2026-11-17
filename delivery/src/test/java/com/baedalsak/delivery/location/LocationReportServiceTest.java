@@ -43,6 +43,7 @@ class LocationReportServiceTest {
 
     private final DeliveryRepository repository = mock(DeliveryRepository.class);
     private final DeliveryRouteService routeService = mock(DeliveryRouteService.class);
+    private final ApproachRouteService approachRouteService = mock(ApproachRouteService.class);
     private final RiderLocationStore store = mock(RiderLocationStore.class);
     private LocationReportService service;
 
@@ -51,7 +52,7 @@ class LocationReportServiceTest {
         // 도보 3.6km/h = 1m/s, 자전거 9km/h = 2.5m/s, 오토바이 18km/h = 5m/s, 도착 반경 30m
         DeliveryGpsProperties gps = new DeliveryGpsProperties(DeliveryGpsProperties.Mode.VIRTUAL,
                 Duration.ofSeconds(2), new DeliveryGpsProperties.SpeedKmh(3.6, 9, 18), 30, Duration.ofMinutes(30));
-        service = new LocationReportService(repository, routeService, store, gps,
+        service = new LocationReportService(repository, routeService, approachRouteService, store, gps,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
         when(store.find(anyLong())).thenReturn(Optional.empty());
     }
@@ -117,7 +118,7 @@ class LocationReportServiceTest {
     void keepsFirstArrivalTimeAfterArrived() {
         OffsetDateTime firstArrival = now().minusMinutes(1);
         when(store.find(1L)).thenReturn(Optional.of(new RiderLocation(HOME.lat(), HOME.lng(), 0, now(),
-                true, firstArrival, firstArrival, LocationSource.REAL)));
+                true, firstArrival, firstArrival, LocationSource.REAL, RouteLeg.TO_CUSTOMER)));
         // 도착 후 GPS 가 조금 튀어 반경 밖으로 나가도 도착은 유지
         GeoPoint drifted = new GeoPoint(HOME.lat() + 0.0005, HOME.lng());
 
@@ -162,12 +163,47 @@ class LocationReportServiceTest {
     }
 
     @Test
-    void realReportRejectsBeforePickup() {
-        when(repository.findById(1L)).thenReturn(Optional.of(delivery(1L, DeliveryStatus.ASSIGNED)));
+    void realReportRejectsBeforeAssignment() {
+        when(repository.findById(1L)).thenReturn(Optional.of(delivery(1L, DeliveryStatus.DELIVERED)));
 
         assertThatThrownBy(() -> service.reportReal(1L, RIDER_ID, STORE))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DELIVERY_INVALID_STATUS));
+    }
+
+    @Test
+    void assignedDeliveryUsesApproachRouteAndArrivesAtStore() {
+        Delivery delivery = delivery(1L, DeliveryStatus.ASSIGNED);
+        GeoPoint rider = new GeoPoint(STORE.lat() + 0.002, STORE.lng());
+        Route approach = new Route(List.of(rider, STORE), 222, 100, false);
+        when(approachRouteService.readRoute(delivery)).thenReturn(Optional.of(approach));
+
+        assertThat(service.routeOf(delivery)).contains(approach);
+        verify(routeService, never()).readRoute(any());
+
+        // 가게 근처(반경 30m 안)에 오면 가게 도착
+        RiderLocation location = service.report(delivery, approach, STORE, LocationSource.VIRTUAL, 222.0);
+        assertThat(location.leg()).isEqualTo(RouteLeg.TO_STORE);
+        assertThat(location.arrived()).isTrue();
+    }
+
+    @Test
+    void assignedDeliveryHasNoRouteUntilApproachSaved() {
+        Delivery delivery = delivery(1L, DeliveryStatus.ASSIGNED);
+        when(approachRouteService.readRoute(delivery)).thenReturn(Optional.empty());
+
+        // 가게까지 경로가 없을 때 가게 → 배달지 직선으로 대신하지 않는다
+        assertThat(service.routeOf(delivery)).isEmpty();
+    }
+
+    @Test
+    void realReportAcceptedWhileGoingToStore() {
+        when(repository.findById(1L)).thenReturn(Optional.of(delivery(1L, DeliveryStatus.ASSIGNED)));
+
+        RiderLocation location = service.reportReal(1L, RIDER_ID, STORE);
+
+        assertThat(location.leg()).isEqualTo(RouteLeg.TO_STORE);
+        verify(store).stopSimulation(1L);
     }
 
     @Test
@@ -207,7 +243,7 @@ class LocationReportServiceTest {
     void realRemainingDoesNotJumpBackBeyondTolerance() {
         // 직전에 50m 남음 → 출발점 근처로 튄 GPS 는 지나온 구간이라 보지 않고, 남은 구간 중 가장 가까운 곳으로 본다
         when(store.find(1L)).thenReturn(Optional.of(new RiderLocation(HOME.lat(), HOME.lng(), 50, now(),
-                false, null, now(), LocationSource.REAL)));
+                false, null, now(), LocationSource.REAL, RouteLeg.TO_CUSTOMER)));
 
         RiderLocation location = service.report(delivery(1L, DeliveryStatus.PICKED_UP), ROUTE, STORE,
                 LocationSource.REAL);
@@ -219,7 +255,7 @@ class LocationReportServiceTest {
     void etaFreezesAtArrivalTime() {
         OffsetDateTime firstArrival = now().minusMinutes(2);
         when(store.find(1L)).thenReturn(Optional.of(new RiderLocation(HOME.lat(), HOME.lng(), 0, firstArrival,
-                true, firstArrival, firstArrival, LocationSource.VIRTUAL)));
+                true, firstArrival, firstArrival, LocationSource.VIRTUAL, RouteLeg.TO_CUSTOMER)));
 
         RiderLocation location = service.report(delivery(1L, DeliveryStatus.PICKED_UP), ROUTE, HOME,
                 LocationSource.VIRTUAL, 1000.0);

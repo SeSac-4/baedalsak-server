@@ -120,7 +120,8 @@ public class DeliveryController {
                 .orElse(ResponseEntity.noContent().build());
     }
 
-    // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 화면 진입 시 한 번. 픽업 전이면 204
+    // 주문의 배달 경로 (고객 · 사장님 · 배정된 라이더). 지도 경로선용, 구간마다 한 번.
+    // 배차 완료면 라이더 → 가게(leg=TO_STORE), 픽업 후면 가게 → 배달지(leg=TO_CUSTOMER). 배차 전 · 계산 전이면 204
     @GetMapping("/by-order/{orderId}/route")
     public ResponseEntity<DeliveryRouteResponse> getRoute(@PathVariable Long orderId,
                                                           @CurrentMember LoginMember member) {
@@ -130,7 +131,7 @@ public class DeliveryController {
     }
 
     // 주문의 실시간 위치 (고객 · 사장님 · 배정된 라이더). 2초 폴링. 상태를 같이 실어 픽업 · 완료도 이 응답으로 안다.
-    // 배달이 없으면 204, 있으면 200 (위치는 픽업 중에만, 아니면 location=null)
+    // 배달이 없으면 204, 있으면 200 (위치는 배차 완료 · 픽업 중에만, 아니면 location=null)
     @GetMapping("/by-order/{orderId}/location")
     public ResponseEntity<DeliveryLocationResponse> getLocation(@PathVariable Long orderId,
                                                                 @CurrentMember LoginMember member) {
@@ -139,7 +140,7 @@ public class DeliveryController {
                 .orElse(ResponseEntity.noContent().build());
     }
 
-    // 실제 GPS 위치 업로드 (라이더 앱). 배정된 라이더 본인 · 픽업 중(PICKED_UP)만. 보내면 그 배달의 가상 GPS 는 멈춘다
+    // 실제 GPS 위치 업로드 (라이더 앱). 배정된 라이더 본인 · 진행 중(배차 완료 · 픽업)만. 보내면 그 배달의 가상 GPS 는 멈춘다
     @PutMapping("/{deliveryId}/location")
     public RiderLocation reportLocation(@PathVariable Long deliveryId, @CurrentMember LoginMember rider,
                                         @Valid @RequestBody LocationReportRequest request) {

@@ -15,7 +15,7 @@ import java.util.Optional;
 
 /**
  * 주문의 배달 경로 · 실시간 위치 조회 (배달실시간초안 10번). 고객 · 사장님 · 배정된 라이더가 같은 값을 본다.
- * 위치는 캐시 Redis 에서, 경로 · 상태는 DB 에서 읽는다.
+ * 위치 · 가게까지 경로는 캐시 Redis 에서, 배달지까지 경로 · 상태는 DB 에서 읽는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -23,30 +23,38 @@ public class DeliveryTrackingService {
 
     private final DeliveryRepository deliveryRepository;
     private final DeliveryRouteService deliveryRouteService;
+    private final ApproachRouteService approachRouteService;
     private final RiderLocationStore riderLocationStore;
 
     /**
      * @param orderId  주문 ID
      * @param memberId 요청자
-     * @return 경로. 배달이 없거나 아직 경로가 없으면(픽업 전) 빈 값 → 204
+     * @return 지금 구간 경로 (배차 완료 = 라이더 → 가게, 픽업 후 = 가게 → 배달지).
+     * 배달이 없거나 배차 전이거나 아직 경로가 없으면 빈 값 → 204
      */
     @Transactional(readOnly = true)
     public Optional<DeliveryRouteResponse> getRoute(Long orderId, Long memberId) {
         return findAuthorized(orderId, memberId)
-                .flatMap(delivery -> deliveryRouteService.readRoute(delivery)
-                        .map(route -> DeliveryRouteResponse.of(delivery.getId(), route)));
+                .filter(delivery -> delivery.getStatus() != DeliveryStatus.WAITING)
+                .flatMap(delivery -> {
+                    RouteLeg leg = RouteLeg.of(delivery.getStatus());
+                    Optional<Route> route = leg == RouteLeg.TO_STORE
+                            ? approachRouteService.readRoute(delivery)
+                            : deliveryRouteService.readRoute(delivery);
+                    return route.map(found -> DeliveryRouteResponse.of(delivery.getId(), leg, found));
+                });
     }
 
     /**
      * @param orderId  주문 ID
      * @param memberId 요청자
-     * @return 상태 + 위치. 배달이 없으면 빈 값 → 204. 위치는 픽업 중(PICKED_UP)일 때만 싣는다
+     * @return 상태 + 위치. 배달이 없으면 빈 값 → 204. 위치는 진행 중(배차 완료 · 픽업)일 때만 싣는다
      */
     @Transactional(readOnly = true)
     public Optional<DeliveryLocationResponse> getLocation(Long orderId, Long memberId) {
         return findAuthorized(orderId, memberId)
                 .map(delivery -> DeliveryLocationResponse.of(delivery,
-                        delivery.getStatus() == DeliveryStatus.PICKED_UP
+                        DeliveryStatus.ACTIVE.contains(delivery.getStatus())
                                 ? riderLocationStore.find(delivery.getId()).orElse(null)
                                 : null));
     }

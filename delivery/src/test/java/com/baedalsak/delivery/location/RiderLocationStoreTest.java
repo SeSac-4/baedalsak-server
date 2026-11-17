@@ -47,7 +47,7 @@ class RiderLocationStoreTest {
     void savesJsonWithTtlAndReadsItBack() {
         when(redis.opsForValue()).thenReturn(values);
         OffsetDateTime at = OffsetDateTime.of(2026, 11, 6, 12, 0, 0, 0, ZoneOffset.ofHours(9));
-        RiderLocation location = new RiderLocation(37.5, 127.0, 120, at, false, null, at, LocationSource.VIRTUAL);
+        RiderLocation location = new RiderLocation(37.5, 127.0, 120, at, false, null, at, LocationSource.VIRTUAL, RouteLeg.TO_CUSTOMER);
 
         store.save(7L, location);
 
@@ -76,10 +76,10 @@ class RiderLocationStoreTest {
     void saveDoesNotThrowWhenRedisIsDown() {
         when(redis.opsForValue()).thenThrow(new RedisConnectionFailureException("down"));
         RiderLocation location = new RiderLocation(37.5, 127.0, null, null, false, null,
-                OffsetDateTime.now(), LocationSource.REAL);
+                OffsetDateTime.now(), LocationSource.REAL, RouteLeg.TO_CUSTOMER);
 
         store.save(7L, location);   // 예외 없이 끝나면 통과
-        assertThat(store.startSimulation(7L, Instant.now())).isFalse();
+        assertThat(store.startSimulation(7L, new SimulationStart(RouteLeg.TO_STORE, Instant.now()))).isFalse();
     }
 
     @Test
@@ -123,6 +123,44 @@ class RiderLocationStoreTest {
         // 이미 다른 요청이 둔 위치가 있으면 새 후보 대신 그 값을 쓴다
         assertThat(store.placeRiderPositionIfAbsent(9L, new GeoPoint(37.6, 127.1))).contains(first);
         assertThat(store.findRiderPosition(9L)).contains(first);
+    }
+
+    @Test
+    void keepsStartOfSameLegAndReplacesStartOfNewLeg() {
+        when(redis.opsForValue()).thenReturn(values);
+        when(redis.opsForSet()).thenReturn(sets);
+        Instant assignedAt = NOW.minusSeconds(60);
+        when(values.get("delivery:sim:7")).thenReturn("TO_STORE:" + assignedAt.toEpochMilli());
+
+        // 같은 구간: 처음 시작 시각 유지
+        store.startSimulation(7L, new SimulationStart(RouteLeg.TO_STORE, NOW));
+        verify(values, times(0)).set(eq("delivery:sim:7"), anyString(), eq(TTL));
+
+        // 픽업으로 구간이 바뀜: 새 시작 시각으로 덮어씀
+        store.startSimulation(7L, new SimulationStart(RouteLeg.TO_CUSTOMER, NOW));
+        verify(values).set("delivery:sim:7", "TO_CUSTOMER:" + NOW.toEpochMilli(), TTL);
+    }
+
+    @Test
+    void readsLegacySimulationStartAsCustomerLeg() {
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.get("delivery:sim:7")).thenReturn(String.valueOf(NOW.toEpochMilli()));
+
+        assertThat(store.findSimulationStart(7L)).contains(new SimulationStart(RouteLeg.TO_CUSTOMER, NOW));
+    }
+
+    @Test
+    void approachRouteRoundTripsAsJson() {
+        when(redis.opsForValue()).thenReturn(values);
+        Route route = new Route(java.util.List.of(new GeoPoint(37.5, 127.0), new GeoPoint(37.51, 127.0)), 1110, 133,
+                true);
+
+        store.saveApproachRoute(7L, route);
+
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(values).setIfAbsent(eq("delivery:approach:7"), json.capture(), eq(RiderLocationStore.APPROACH_ROUTE_TTL));
+        when(values.get("delivery:approach:7")).thenReturn(json.getValue());
+        assertThat(store.findApproachRoute(7L)).contains(route);
     }
 
     /** 테스트에서 시간을 앞으로 돌리는 시계 */

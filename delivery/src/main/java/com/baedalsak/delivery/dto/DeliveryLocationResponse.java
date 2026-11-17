@@ -11,7 +11,7 @@ import com.baedalsak.delivery.location.RiderLocation;
  * @param deliveryId 배달 ID
  * @param orderId    주문 ID
  * @param status     배달 상태
- * @param location   라이더 위치. 픽업 전 · 완료 후 · 아직 첫 위치 전이면 null
+ * @param location   라이더 위치. 배차 전 · 완료 후 · 아직 첫 위치 전이면 null
  */
 public record DeliveryLocationResponse(
         Long deliveryId,
