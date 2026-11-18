@@ -125,6 +125,13 @@ sms:
   # 주문·배달 알림 문자 (#182). 휴대폰 인증한 고객에게만 감. 월 한도 1달러라 필요하면 false 로 끔
   notification-enabled: ${SMS_NOTIFICATION_ENABLED:true}
 
+# 알림 문자 멱등 기록 sms_log 정리 (#232)
+#   retention   : 이보다 오래된 행을 지움 (중복 전달은 몇 분 안에 오고, DLQ 재처리까지 고려해 30일)
+#   cleanup-cron: 매일 10:00 KST — AWS 는 평일 09:30~18:00 만 켜져 있어 새벽 cron 은 돌지 않음
+sms-log:
+  retention: ${SMS_LOG_RETENTION:30d}
+  cleanup-cron: ${SMS_LOG_CLEANUP_CRON:0 0 10 * * *}
+
 # 가입 전 이메일 인증 메일 (#207)
 #   ses: AWS SES 로 실제 발송 (기본값 — 권한은 infra #61, 샌드박스라 등록한 주소로만 감)
 #   log: 로컬 개발용, 메일 대신 로그에 코드 출력 → .env 에 EMAIL_SENDER=log
