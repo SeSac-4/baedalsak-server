@@ -3,29 +3,38 @@ package com.baedalsak.member.domain;
 import java.time.OffsetDateTime;
 
 import org.hibernate.annotations.SQLRestriction;
+import org.springframework.data.domain.Persistable;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Entity 
+@Entity
 @Table(name = "member")
 @SQLRestriction("deleted_at IS NULL")   // 탈퇴한 회원은 모든 조회에서 빠짐 → 내 정보·내부 조회 404, 알림 문자 안 감 (#188)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) 
-public class Member {
-  
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Member implements Persistable<Long> {
+
+  // 회원번호는 가입 때 시퀀스에서 먼저 받아(MemberRepository.nextId) 직접 넣는다 (#234).
+  // Cognito username 이 이 번호라서, INSERT 전에 번호가 있어야 Cognito 를 트랜잭션 밖에서 부를 수 있다
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  // 새로 만든 회원인가 — 번호를 직접 넣으면 Spring Data 가 id 만 보고 "이미 있는 행"으로 착각해
+  // SELECT 후 merge 하므로, 새 객체인지 따로 알려 준다. DB 에서 읽었거나 저장한 뒤에는 false
+  @Transient
+  @Getter(AccessLevel.NONE)
+  private boolean newEntity = true;
 
   @Column(nullable = false, unique = true, length = 255)
   private String email;
@@ -54,6 +63,7 @@ public class Member {
   private OffsetDateTime updatedAt;
   
 
+  /** 번호 없이 만든다 — 테스트용. 저장하려면 아래 생성자로 번호를 넣어야 한다 */
   public Member(String email, String name, String phone, Role role) {
         this.email = email;
         this.name = name;
@@ -61,6 +71,23 @@ public class Member {
         this.role = role;
         this.updatedAt = OffsetDateTime.now();
     }
+
+  /** 가입 (#234): 시퀀스에서 먼저 받은 회원번호로 만든다 (Cognito username 과 같은 번호) */
+  public Member(long id, String email, String name, String phone, Role role) {
+    this(email, name, phone, role);
+    this.id = id;
+  }
+
+  @Override
+  public boolean isNew() {
+    return newEntity;
+  }
+
+  @PostLoad
+  @PostPersist
+  void markNotNew() {
+    this.newEntity = false;
+  }
 
       /** 휴대폰 인증 성공 (#164) — JPA 가 트랜잭션 끝에 UPDATE (변경 감지) */
   public void markPhoneVerified() {

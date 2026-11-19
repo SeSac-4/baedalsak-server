@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,7 +43,7 @@ import com.baedalsak.member.repository.OwnerProfileRepository;
 import com.baedalsak.member.repository.RiderProfileRepository;
 
 /**
- * 회원가입 (#19 T47): DB 저장 → Cognito 생성 → 커밋 → 로그인 순서와 실패 시 정리.
+ * 회원가입 (#19 T47, #234): 회원번호 받기 → Cognito 생성(트랜잭션 밖) → DB 저장 · 커밋 → 로그인 순서와 실패 시 정리.
  * DB 없이 돌리려고 저장소 · Cognito · 로그인은 가짜(mock), 트랜잭션은 커밋 · 롤백만 기록하는 가짜 관리자를 쓴다.
  */
 @ExtendWith(MockitoExtension.class)
@@ -84,11 +84,9 @@ class SignupServiceTest {
     return new SignupCustomerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", phoneVerificationToken, null, address);
   }
 
-  /** DB 가 INSERT 후 id 1000 을 돌려준 것처럼 */
+  /** 시퀀스가 회원번호 1000 을 준 것처럼 (저장은 mock 이라 아무 일도 안 함) */
   private void memberSavedWithId() {
-    Member saved = mock(Member.class);
-    when(saved.getId()).thenReturn(MEMBER_ID);
-    when(memberRepository.saveAndFlush(any(Member.class))).thenReturn(saved);
+    when(memberRepository.nextId()).thenReturn(MEMBER_ID);
   }
 
   @Test
@@ -101,6 +99,7 @@ class SignupServiceTest {
 
     assertThat(result).isEqualTo(loggedIn);
     verify(cognitoAuthClient).createUser(MEMBER_ID, EMAIL, PASSWORD, Role.CUSTOMER);   // username = member id
+    verify(memberRepository).saveAndFlush(argThat(m -> m.getId() == MEMBER_ID && m.isNew()));   // 받은 번호로 INSERT
     assertThat(tx.committed).isTrue();
     verify(cognitoAuthClient, never()).deleteUser(anyLong());
   }
@@ -162,6 +161,7 @@ class SignupServiceTest {
     assertThatThrownBy(() -> signupService.signupCustomer(customer("bad")))
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode").isEqualTo(CommonErrorCode.VALIDATION_FAILED);
+    verify(memberRepository, never()).nextId();   // 번호도 받지 않음
     verify(memberRepository, never()).saveAndFlush(any());
     verify(cognitoAuthClient, never()).createUser(anyLong(), anyString(), anyString(), any());
   }
@@ -196,22 +196,54 @@ class SignupServiceTest {
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode").isEqualTo(MemberErrorCode.EMAIL_DUPLICATED);
     verify(cognitoAuthClient, never()).createUser(anyLong(), anyString(), anyString(), any());
-    assertThat(tx.rolledBack).isTrue();
+    verify(memberRepository, never()).nextId();
+    assertThat(tx.begun).isFalse();   // 트랜잭션을 열기 전에 끝남
   }
 
   @Test
-  void 동시_가입으로_DB_UNIQUE_위반이면_409() {
+  void 동시_가입으로_DB_UNIQUE_위반이면_409_만든_Cognito_사용자는_지움() {
+    memberSavedWithId();
     when(memberRepository.saveAndFlush(any(Member.class)))
         .thenThrow(new DataIntegrityViolationException("member_email_key"));
 
     assertThatThrownBy(() -> signupService.signupCustomer(customer()))
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode").isEqualTo(MemberErrorCode.EMAIL_DUPLICATED);
-    verify(cognitoAuthClient, never()).createUser(anyLong(), anyString(), anyString(), any());
+    verify(cognitoAuthClient).deleteUser(MEMBER_ID);   // Cognito 는 이미 만들어졌으므로 보상 삭제
+    assertThat(tx.rolledBack).isTrue();
+    verify(authService, never()).login(any());
   }
 
   @Test
-  void Cognito_생성_실패면_DB_롤백_로그인_안함() {
+  void 프로필_저장이_실패해도_Cognito_사용자를_지움() {
+    memberSavedWithId();
+    when(ownerProfileRepository.saveAndFlush(any()))
+        .thenThrow(new DataIntegrityViolationException("owner_profile"));
+
+    assertThatThrownBy(() -> signupService.signupOwner(
+        new SignupOwnerRequest(EMAIL, PASSWORD, "김형준", "010-1234-5678", "싹싹분식", null, null)))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    verify(cognitoAuthClient).deleteUser(MEMBER_ID);
+    assertThat(tx.rolledBack).isTrue();
+  }
+
+  @Test
+  void Cognito_를_부르는_동안에는_DB_트랜잭션이_열려_있지_않음() {
+    memberSavedWithId();
+    doAnswer(inv -> {
+      assertThat(tx.begun).isFalse();   // 커넥션을 잡고 기다리지 않는다 (#234 의 목적)
+      return null;
+    }).when(cognitoAuthClient).createUser(anyLong(), anyString(), anyString(), any());
+
+    signupService.signupCustomer(customer());
+
+    verify(cognitoAuthClient).createUser(MEMBER_ID, EMAIL, PASSWORD, Role.CUSTOMER);
+    assertThat(tx.begun).isTrue();   // DB 저장은 Cognito 뒤에
+    assertThat(tx.committed).isTrue();
+  }
+
+  @Test
+  void Cognito_생성_실패면_DB_에_아무것도_안_넣고_로그인_안함() {
     memberSavedWithId();
     doThrow(new BusinessException(CommonErrorCode.DEPENDENCY_UNAVAILABLE))
         .when(cognitoAuthClient).createUser(anyLong(), anyString(), anyString(), any());
@@ -219,8 +251,8 @@ class SignupServiceTest {
     assertThatThrownBy(() -> signupService.signupCustomer(customer()))
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode").isEqualTo(CommonErrorCode.DEPENDENCY_UNAVAILABLE);
-    assertThat(tx.rolledBack).isTrue();
-    assertThat(tx.committed).isFalse();
+    assertThat(tx.begun).isFalse();   // DB 트랜잭션을 열지도 않음
+    verify(memberRepository, never()).saveAndFlush(any());
     verify(cognitoAuthClient, never()).deleteUser(anyLong());   // 만들어진 사용자가 없음 (createUser 가 스스로 정리)
     verify(authService, never()).login(any());
   }
@@ -238,6 +270,7 @@ class SignupServiceTest {
 
   /** DB 없이 트랜잭션 흐름만 흉내 낸다: 커밋 · 롤백 여부를 기록하고, failOnCommit 이면 커밋을 실패시킨다 */
   static class FakeTransactionManager extends AbstractPlatformTransactionManager {
+    boolean begun;
     boolean committed;
     boolean rolledBack;
     boolean failOnCommit;
@@ -249,6 +282,7 @@ class SignupServiceTest {
 
     @Override
     protected void doBegin(Object transaction, TransactionDefinition definition) {
+      begun = true;
     }
 
     @Override
